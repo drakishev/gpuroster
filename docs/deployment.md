@@ -11,7 +11,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install build==1.6.1
 .venv/bin/python -m build
 sudo python3 -m venv /opt/gpuroster/venv
-sudo /opt/gpuroster/venv/bin/python -m pip install dist/gpuroster-0.4.0-py3-none-any.whl
+sudo /opt/gpuroster/venv/bin/python -m pip install dist/gpuroster-0.5.0-py3-none-any.whl
 /opt/gpuroster/venv/bin/gpuroster --version
 ```
 
@@ -71,7 +71,7 @@ The first collector write retains the Phase 2 additive `gpu_uuid` migration and 
 
 ```bash
 python3 -m venv /tmp/gpuroster-install
-/tmp/gpuroster-install/bin/python -m pip install dist/gpuroster-0.4.0-py3-none-any.whl
+/tmp/gpuroster-install/bin/python -m pip install dist/gpuroster-0.5.0-py3-none-any.whl
 python3 scripts/smoke_install.py /tmp/gpuroster-install/bin/gpuroster
 ```
 

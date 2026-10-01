@@ -109,9 +109,11 @@ class DemoHistory:
     """Generate bounded, illustrative bucket values; never open a SQLite file."""
 
     last_write = None
+    last_write_monotonic = None
 
     def write(self, rows, now, monotonic):
         self.last_write = now
+        self.last_write_monotonic = monotonic
 
     def read(self, range_key, now, timezone_name="UTC"):
         since, bucket = history_window(range_key, now, timezone_name)

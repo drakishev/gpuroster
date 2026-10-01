@@ -79,7 +79,7 @@ Recorded on the same Linux/Python 3.12 host on 2026-10-01, sequentially with a f
 
 Waitress passes the criteria and preserves collector independence. Its 50-client p95 is lower in this run, but this short test excludes slow clients, TLS/proxy overhead, and concurrent history aggregation. It establishes suitability for the measured workload, not a production capacity limit. [ADR-004](architecture/ADR-004-production-deployment.md) records the lifecycle and deployment tradeoffs.
 
-Raw aggregate outputs are under [benchmarks/results](../benchmarks/results/). Future work includes longer mixed live/history soak tests, browser memory/load timing, multiple driver/GPU configurations, and MIG behavior.
+Raw aggregate outputs are under [benchmarks/results](../benchmarks/results/). Later sections cover mixed live/history traffic and browser timing. Multiple driver/GPU configurations, MIG behavior, and longer resource profiles remain future work.
 
 ## Offline demo browser
 
@@ -101,4 +101,64 @@ Measured on 2026-10-01 with Python 3.12, Chromium, the production HTTP adapter, 
 | Dashboard JavaScript | 17,704 bytes |
 | Retained JS heap, before / after 100 / after 1,000 refreshes | 2,947,704 / 3,711,432 / 4,269,580 bytes |
 
-Heap was measured through Chromium's performance API after explicit garbage collection. It grew during this short run; the figures do not establish a leak-free steady state or browser process RSS. Longer timed runs remain future work. Assets are shipped in the Python package, and the recorded screenshot/API data use only generated identities. Raw output is [offline-demo-browser-2026-10-01.json](../benchmarks/results/offline-demo-browser-2026-10-01.json).
+Heap was measured through Chromium's performance API after explicit garbage collection. It grew during this short run; the figures do not establish a leak-free steady state or browser process RSS. A later timed run is described below. Assets are shipped in the Python package, and the recorded screenshot/API data use only generated identities. Raw output is [offline-demo-browser-2026-10-01.json](../benchmarks/results/offline-demo-browser-2026-10-01.json).
+
+## Shared historical queries and mixed traffic
+
+Phase 5 hypothesis: eliminating duplicate history aggregation reduces contention
+on the four HTTP workers while preserving independent hardware polling. The
+[research report](research/history-query-sharing.md) includes methodology,
+1/5/20/50-client baseline/comparison tables, raw outputs, and limits. Each short
+case runs in a fresh process with 345,600 synthetic rows and includes cold
+queries. Reproduce with:
+
+```bash
+python -m benchmarks.history_load
+python -m benchmarks.history_load --clients 50 --duration 185 --stats-interval 1 --history-interval 5
+```
+
+| 50-client, 10-second workload | Before | Shared queries |
+| --- | --- | --- |
+| History requests / SQL queries | 100 / 100 | 100 / 1 |
+| Live responses delivered | 942 | 1,976 |
+| Live HTTP p95 | 2,761.274 ms | 358.274 ms |
+| History HTTP p95 | 4,978.465 ms | 519.367 ms |
+| CPU, including clients | 26.844 s | 10.382 s |
+| Source cycles / HTTP failures | 37 / 0 | 40 / 0 |
+
+The 185-second mixed run completed 11,067 requests without HTTP or write failures.
+Six SQL queries served 1,850 history requests across four writes. Live/history
+p95 was 140.126/495.966 ms, with maximum latency reaching 1.68 seconds. The
+collector ran 736 cycles against about 740 scheduled opportunities. Combined
+server/client RSS grew from 37.0 to 86.4 MiB; no memory plateau or production
+capacity claim is made. See the report for retained benchmark data and host-load
+limitations. The original uncached storage benchmark remains valid:
+`HistoryStore.read` still executes SQLite directly.
+
+## Five-minute browser run
+
+```bash
+python -m benchmarks.dashboard --soak-seconds 300
+```
+
+Phase 5 extends the same real Chromium/demo benchmark: after five fresh page
+loads and 1,000 warm-up updates, refresh every 500 ms for 300 seconds, leaving
+normal browser polling enabled. Switch live/today/week/month views every 30
+seconds and refresh the selected historical view along with live stats. Measure
+retained JS heap after explicit garbage collection every 30 seconds. The browser
+run follows the HTTP load run; they do not run simultaneously.
+
+| Measurement | Result |
+| --- | --- |
+| Timed duration / additional manual refreshes | 300.024 s / 599 |
+| HTTP errors / browser errors / external requests | 0 / 0 / 0 |
+| Retained JS heap, start / finish | 4,266,392 / 4,317,480 bytes |
+| Retained JS heap, sampled minimum / maximum | 4,234,040 / 4,370,212 bytes |
+| Fresh dashboard ready, median | 109.437 ms |
+| Warm-up refresh, median / p95 | 11.109 / 16.780 ms |
+
+Sampled retained heap stayed within a narrow band after warm-up, including range
+changes. This is encouraging for this generated workload but does not rule out
+long-term leaks, measure total browser RSS, or test growing real identity counts.
+The demo uses no SQLite or host monitoring. Raw results:
+[browser-soak-2026-10-01.json](../benchmarks/results/browser-soak-2026-10-01.json).
