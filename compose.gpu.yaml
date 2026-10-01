@@ -1,0 +1,19 @@
+# Linux host monitoring: map GPU PIDs and account names to their real host values.
+services:
+  gpuroster:
+    runtime: nvidia
+    pid: host
+    volumes:
+      - type: bind
+        source: /etc/passwd
+        target: /etc/passwd
+        read_only: true
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

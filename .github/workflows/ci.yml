@@ -128,9 +128,24 @@ jobs:
       - run: python -m pip check
       - run: python -m unittest discover -s tests -v
 
+  containers:
+    name: Docker build and deployment smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker compose version
+      - run: docker compose config --quiet
+      - run: docker compose -f compose.yaml -f compose.gpu.yaml config --quiet
+      - name: Check that private files cannot enter the build context
+        run: python3 -m scripts.check_container_context
+      - run: docker build --tag gpuroster:ci .
+      - name: Test demo and unavailable-GPU deployment without NVIDIA hardware
+        run: python3 -m scripts.smoke_container --image gpuroster:ci
+
   artifacts:
     name: Reproducible release bundle
-    needs: [quality, backend, browser, dependencies, packaging, compatibility]
+    needs: [quality, backend, browser, dependencies, packaging, compatibility, containers]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

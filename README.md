@@ -10,6 +10,17 @@ The screenshot comes from the built-in demo; it contains no real host or user da
 
 ## Try without a GPU
 
+For Docker, create a password and start the packaged demo:
+
+```bash
+python3 scripts/container_password.py
+docker compose up --build -d demo
+```
+
+Open **http://127.0.0.1:18081** and sign in as **viewer** with that password.
+See [Docker deployment](docs/docker.md) for NVIDIA GPU access, persistent history,
+configuration, and validation. The image includes the backend and dashboard.
+
 Use Linux and Python 3.10 or newer:
 
 ```bash

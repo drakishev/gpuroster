@@ -1,5 +1,9 @@
 # Linux deployment
 
+For the packaged Docker image and Compose configurations, see
+[Docker deployment](docker.md). The instructions below describe native systemd
+deployment, including host login/session collection.
+
 Use the installed `gpuroster` command under a service manager. For actual monitoring, leave `GPUROSTER_DEMO` unset or `0` and omit `--demo`; demo mode deliberately does not monitor the host or persist history. It runs Waitress with four request threads, one collector thread, and at most one NVML worker. A bare Flask/WSGI import does not start collection. Multiple web workers and network-filesystem history are not supported. See [ADR-004](architecture/ADR-004-production-deployment.md).
 
 ## Install the package
@@ -13,7 +17,7 @@ python3 -m venv .venv
 (cd dist/release && sha256sum -c SHA256SUMS)
 sudo python3 -m venv /opt/gpuroster/venv
 sudo /opt/gpuroster/venv/bin/python -m pip install --require-hashes --only-binary=:all: -r dist/release/runtime.lock
-sudo /opt/gpuroster/venv/bin/python -m pip install --no-deps dist/release/gpuroster-0.5.1-py3-none-any.whl
+sudo /opt/gpuroster/venv/bin/python -m pip install --no-deps dist/release/gpuroster-0.6.0-py3-none-any.whl
 sudo /opt/gpuroster/venv/bin/python -m pip check
 /opt/gpuroster/venv/bin/gpuroster --version
 ```
@@ -75,7 +79,7 @@ The first collector write retains the Phase 2 additive `gpu_uuid` migration and 
 ```bash
 python3 -m venv /tmp/gpuroster-install
 /tmp/gpuroster-install/bin/python -m pip install --require-hashes --only-binary=:all: -r dist/release/runtime.lock
-/tmp/gpuroster-install/bin/python -m pip install --no-deps dist/release/gpuroster-0.5.1-py3-none-any.whl
+/tmp/gpuroster-install/bin/python -m pip install --no-deps dist/release/gpuroster-0.6.0-py3-none-any.whl
 python3 scripts/smoke_install.py /tmp/gpuroster-install/bin/gpuroster
 ```
 

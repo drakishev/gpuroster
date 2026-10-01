@@ -1,6 +1,10 @@
 include scripts/smoke_install.py
 include scripts/lock_dependencies.py
 include scripts/build_release.py
+include scripts/container_password.py
+include scripts/smoke_container.py
+include scripts/check_container_context.py
+include Dockerfile .dockerignore compose.yaml compose.gpu.yaml
 recursive-include requirements *.in *.lock *.md
 recursive-include deploy *.service *.example
 recursive-include docs *.md

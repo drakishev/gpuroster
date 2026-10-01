@@ -1,0 +1,51 @@
+name: gpuroster
+
+x-environment: &environment
+  GPUROSTER_AUTH_USER: ${GPUROSTER_AUTH_USER:-viewer}
+  GPUROSTER_AUTH_PASSWORD_FILE: /run/secrets/dashboard-password
+  GPUROSTER_COLLECT_INTERVAL: ${GPUROSTER_COLLECT_INTERVAL:-3}
+  GPUROSTER_TIMEZONE: ${GPUROSTER_TIMEZONE:-UTC}
+  GPUROSTER_SHOW_COMMANDS: "0"
+  GPUROSTER_SHOW_SESSIONS: "0"
+
+x-application: &application
+  image: ${GPUROSTER_IMAGE:-gpuroster:local}
+  build:
+    context: .
+    args:
+      APP_UID: ${GPUROSTER_UID:-10001}
+      APP_GID: ${GPUROSTER_GID:-10001}
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 512m
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=16m
+  ports:
+    - "127.0.0.1:${GPUROSTER_HTTP_PORT:-18081}:18081"
+  secrets: [dashboard-password]
+  environment: *environment
+  restart: unless-stopped
+  stop_grace_period: 120s
+
+services:
+  gpuroster:
+    <<: *application
+    profiles: [live]
+    volumes:
+      - history:/var/lib/gpuroster
+  demo:
+    <<: *application
+    profiles: [demo]
+    environment:
+      <<: *environment
+      GPUROSTER_DEMO: "1"
+
+secrets:
+  dashboard-password:
+    file: ${GPUROSTER_PASSWORD_FILE:-./private/container/dashboard-password}
+
+volumes:
+  history:
