@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "clock": "simulated, increasing three-second ticks",
+  "history_length": 120,
+  "gpus_per_tick": 8,
+  "windows": 10,
+  "distinct_identities": 9600,
+  "identity_bound": 968,
+  "samples": [
+    {
+      "cycles": 120,
+      "identities": 960,
+      "points": 58080,
+      "traced_bytes": 12252976
+    },
+    {
+      "cycles": 240,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12532264
+    },
+    {
+      "cycles": 360,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12534184
+    },
+    {
+      "cycles": 480,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12534608
+    },
+    {
+      "cycles": 600,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12535096
+    },
+    {
+      "cycles": 720,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12535432
+    },
+    {
+      "cycles": 840,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12536104
+    },
+    {
+      "cycles": 960,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12535848
+    },
+    {
+      "cycles": 1080,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12536792
+    },
+    {
+      "cycles": 1200,
+      "identities": 968,
+      "points": 59040,
+      "traced_bytes": 12537680
+    }
+  ],
+  "second_half_traced_band_bytes": 2248,
+  "after_expiry": {
+    "series": 0,
+    "devices": 0,
+    "last_seen": 0,
+    "ema": 0,
+    "traced_bytes": 252472
+  },
+  "peak_traced_bytes": 12705064,
+  "wall_seconds": 2.894,
+  "checks_passed": true
+}

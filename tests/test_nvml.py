@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 from gpuroster.monitoring.collectors import CollectionError, CommandRunner
 from gpuroster.monitoring.models import GPU
-from gpuroster.monitoring.nvml import AutoGPU, NVMLWorker, read_nvml
+from gpuroster.monitoring.nvml import AutoGPU, NVMLWorker, nvml_worker, read_nvml
 
 
 def stalled_worker(connection):
@@ -32,7 +32,100 @@ class Unsupported(NVMLError):
     pass
 
 
+class PermissionDenied(NVMLError):
+    pass
+
+
+def two_device_nvml():
+    nvml = Mock(
+        NVMLError=NVMLError,
+        NVMLError_NotSupported=Unsupported,
+        NVMLError_NoPermission=PermissionDenied,
+        NVML_TEMPERATURE_GPU=0,
+    )
+    nvml.nvmlDeviceGetCount.return_value = 2
+    nvml.nvmlDeviceGetHandleByIndex.side_effect = [7, 3]
+    nvml.nvmlDeviceGetUUID.side_effect = lambda handle: f"GPU-example-{handle}"
+    nvml.nvmlDeviceGetName.return_value = "Example GPU"
+    nvml.nvmlDeviceGetMemoryInfo.return_value = SimpleNamespace(
+        used=1048576, total=2097152
+    )
+    nvml.nvmlDeviceGetUtilizationRates.return_value = SimpleNamespace(gpu=50)
+    nvml.nvmlDeviceGetPowerUsage.return_value = 50000
+    nvml.nvmlDeviceGetTemperature.return_value = 40
+    nvml.nvmlDeviceGetComputeRunningProcesses.side_effect = lambda handle: [
+        SimpleNamespace(pid=100 + handle, usedGpuMemory=1048576)
+    ]
+    return nvml
+
+
 class NVMLTests(unittest.TestCase):
+    def test_multiple_devices_map_processes_by_uuid_after_index_reordering(self):
+        devices, rows, error = read_nvml(two_device_nvml())
+        self.assertIsNone(error)
+        self.assertEqual([d.uuid for d in devices], ["GPU-example-7", "GPU-example-3"])
+        provider = NVMLWorker()
+        provider.rows = rows
+        with patch(
+            "gpuroster.monitoring.nvml.process_description",
+            return_value=("example-user", "example"),
+        ):
+            processes = provider.processes(devices)
+        self.assertEqual(
+            [(p.gpu_uuid, p.gpu) for p in processes],
+            [("GPU-example-7", 0), ("GPU-example-3", 1)],
+        )
+
+    def test_mig_like_unsupported_utilization_and_denied_metrics_remain_null(self):
+        nvml = two_device_nvml()
+        nvml.nvmlDeviceGetUtilizationRates.side_effect = Unsupported
+        nvml.nvmlDeviceGetMemoryInfo.side_effect = PermissionDenied
+        nvml.nvmlDeviceGetPowerUsage.side_effect = PermissionDenied
+        nvml.nvmlDeviceGetTemperature.side_effect = Unsupported
+        devices, rows, error = read_nvml(nvml)
+        self.assertIsNone(error)
+        self.assertEqual(len(rows), 2)
+        for device in devices:
+            self.assertEqual(
+                (
+                    device.utilization,
+                    device.memory_used,
+                    device.memory_total,
+                    device.temperature,
+                    device.power,
+                ),
+                (None,) * 5,
+            )
+
+    def test_partial_process_permission_failure_does_not_discard_gpu_metrics(self):
+        nvml = two_device_nvml()
+        nvml.nvmlDeviceGetComputeRunningProcesses.side_effect = [
+            PermissionDenied(),
+            [SimpleNamespace(pid=103, usedGpuMemory=None)],
+        ]
+        devices, rows, error = read_nvml(nvml)
+        self.assertEqual(len(devices), 2)
+        self.assertEqual(error, "process_metrics_unavailable")
+        self.assertEqual(rows, (("GPU-example-3", 103, None),))
+        provider = NVMLWorker()
+        provider.rows, provider.process_error = rows, error
+        with self.assertRaisesRegex(CollectionError, "process_metrics_unavailable"):
+            provider.processes(devices)
+
+    def test_driver_failure_is_reported_without_exception_text_and_shutdown_runs(self):
+        nvml = two_device_nvml()
+        nvml.nvmlDeviceGetMemoryInfo.side_effect = NVMLError("PRIVATE_DRIVER_DATA")
+        connection = Mock()
+        connection.recv.side_effect = ["sample", "stop"]
+        with (
+            patch.dict("sys.modules", pynvml=nvml),
+            patch.dict("os.environ", {}, clear=False),
+        ):
+            nvml_worker(connection)
+        connection.send.assert_called_once_with({"error": "gpu_collection_failed"})
+        nvml.nvmlShutdown.assert_called_once()
+        connection.close.assert_called_once()
+
     def test_worker_deadline_terminates_and_next_sample_can_restart(self):
         provider = NVMLWorker(timeout=0.1, target=stalled_worker)
         self.addCleanup(provider.close)
