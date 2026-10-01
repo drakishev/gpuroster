@@ -10,6 +10,21 @@ from zoneinfo import ZoneInfo
 from gpuroster.monitoring.models import utc_iso
 
 
+def history_window(range_key, now, timezone_name):
+    if range_key not in {"today", "week", "month"}:
+        raise ValueError("invalid_range")
+    if range_key == "today":
+        since = (
+            datetime.fromtimestamp(now, ZoneInfo(timezone_name))
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+            .timestamp()
+        )
+        return since, 300
+    return now - (7 if range_key == "week" else 30) * 86400, (
+        3600 if range_key == "week" else 21600
+    )
+
+
 class RollingHistory:
     def __init__(self, interval=3, length=120):
         self.interval = interval
@@ -91,18 +106,7 @@ class HistoryStore:
         self.last_write_monotonic = monotonic
 
     def read(self, range_key, now, timezone_name="UTC"):
-        if range_key not in {"today", "week", "month"}:
-            raise ValueError("invalid_range")
-        if range_key == "today":
-            since = (
-                datetime.fromtimestamp(now, ZoneInfo(timezone_name))
-                .replace(hour=0, minute=0, second=0, microsecond=0)
-                .timestamp()
-            )
-            bucket = 300
-        else:
-            since = now - (7 if range_key == "week" else 30) * 86400
-            bucket = 3600 if range_key == "week" else 21600
+        since, bucket = history_window(range_key, now, timezone_name)
         uri = Path(self.path).resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(uri, uri=True, timeout=1)) as connection:
             columns = {

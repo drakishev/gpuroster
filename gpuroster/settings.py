@@ -56,6 +56,7 @@ def load_settings(environ=None):
             "GPUROSTER_TIMEZONE must name an installed IANA timezone"
         ) from None
     return {
+        "DEMO": flag("GPUROSTER_DEMO"),
         "BIND_HOST": env.get("GPUROSTER_HOST", "127.0.0.1"),
         "BIND_PORT": port,
         "AUTH_USER": username,

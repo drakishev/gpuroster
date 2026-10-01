@@ -31,6 +31,10 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: node --check gpuroster/static/dashboard.js
+      - run: npm ci --ignore-scripts
+      - run: npm run build:assets
+      - run: git diff --exit-code -- gpuroster/static
+      - run: npm audit
       - run: bash -n start.sh
       - run: git diff --check
       - name: Validate systemd unit syntax without installing a service
@@ -102,3 +106,5 @@ jobs:
           "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip check
       - name: Test installed launcher outside checkout without GPU tools
         run: python scripts/smoke_install.py "$RUNNER_TEMP/gpuroster-install/bin/gpuroster"
+      - name: Test installed synthetic demo without host monitoring or persistent state
+        run: python scripts/smoke_install.py "$RUNNER_TEMP/gpuroster-install/bin/gpuroster" --demo

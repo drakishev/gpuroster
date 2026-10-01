@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
+.card { background: #1a1d2e; border: 1px solid #2d3155; border-radius: 12px; }
+.gpu-card { transition: transform 0.15s, box-shadow 0.15s; }
+.gpu-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(99,102,241,0.18); }
+.bar-bg { background: #2d3155; border-radius: 99px; height: 8px; overflow: hidden; }
+.bar-fill { border-radius: 99px; height: 8px; transition: width 0.6s ease; }
+.util-low  { background: linear-gradient(90deg, #10b981, #34d399); }
+.util-mid  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.util-high { background: linear-gradient(90deg, #ef4444, #f97316); }
+.mem-fill  { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+.badge     { border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
+.badge-active { background: #065f46; color: #34d399; }
+.badge-idle   { background: #1e1b4b; color: #818cf8; }
+.badge-hot    { background: #7f1d1d; color: #fca5a5; }
+.badge-live   { background: #14532d; color: #4ade80; }
+.pill { border-radius: 99px; padding: 1px 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; }
+.pill-user { background: #312e81; color: #a5b4fc; cursor: pointer; }
+.pill-user:hover { background: #4338ca; }
+.pill-user.active-filter { background: #4f46e5; outline: 2px solid #818cf8; }
+.section-title { font-size: 0.7rem; letter-spacing: 0.12em; font-weight: 700; color: #6366f1; text-transform: uppercase; margin-bottom: 12px; }
+table { border-collapse: separate; border-spacing: 0; }
+th { font-size: 0.68rem; letter-spacing: 0.08em; font-weight: 700; color: #6366f1; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid #2d3155; }
+td { padding: 8px 12px; font-size: 0.81rem; border-bottom: 1px solid #1e2138; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #1e2138; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.dot-gray  { background: #4b5563; }
+.pulse { animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.stat-number { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.chart-wrap { position: relative; height: 220px; }
+.session-row-live td { background: rgba(16,185,129,0.05); }
+.session-row-live:hover td { background: rgba(16,185,129,0.1) !important; }
+.hidden-row { display: none; }
+
+.section-heading { margin-bottom: 0; }

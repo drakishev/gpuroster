@@ -1,0 +1,12 @@
+{
+  "name": "gpuroster-assets",
+  "private": true,
+  "scripts": {
+    "build:assets": "node scripts/build-assets.cjs"
+  },
+  "devDependencies": {
+    "@kurkle/color": "0.3.2",
+    "chart.js": "4.4.3",
+    "tailwindcss": "3.4.17"
+  }
+}

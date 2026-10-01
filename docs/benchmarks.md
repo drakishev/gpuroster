@@ -80,3 +80,25 @@ Recorded on the same Linux/Python 3.12 host on 2026-10-01, sequentially with a f
 Waitress passes the criteria and preserves collector independence. Its 50-client p95 is lower in this run, but this short test excludes slow clients, TLS/proxy overhead, and concurrent history aggregation. It establishes suitability for the measured workload, not a production capacity limit. [ADR-004](architecture/ADR-004-production-deployment.md) records the lifecycle and deployment tradeoffs.
 
 Raw aggregate outputs are under [benchmarks/results](../benchmarks/results/). Future work includes longer mixed live/history soak tests, browser memory/load timing, multiple driver/GPU configurations, and MIG behavior.
+
+## Offline demo browser
+
+Phase 4 hypothesis: packaged assets render the real dashboard without third-party requests, while the demo exercises normal API delivery and chart updates. Success means populated charts, no external requests, and no browser errors. Run with development dependencies and Chromium installed:
+
+```bash
+python -m benchmarks.dashboard
+python -m benchmarks.dashboard --screenshot docs/images/demo-dashboard.png
+```
+
+Measured on 2026-10-01 with Python 3.12, Chromium, the production HTTP adapter, four synthetic GPUs, and five fresh browser contexts. Each load waits for four rendered GPU cards. One context then runs 1,000 sequential `fetchStats()` refreshes, much faster than the default five-second interval. The wall-clock measurements include browser automation and local HTTP; they exclude dependency installation and remote network latency.
+
+| Measurement | Result |
+| --- | --- |
+| Dashboard ready, median / maximum | 106.775 / 360.031 ms |
+| Full refresh, median / p95 | 10.834 / 16.343 ms |
+| External requests / browser errors | 0 / 0 |
+| Compiled CSS / chart bundle | 10,943 / 205,325 bytes |
+| Dashboard JavaScript | 17,704 bytes |
+| Retained JS heap, before / after 100 / after 1,000 refreshes | 2,947,704 / 3,711,432 / 4,269,580 bytes |
+
+Heap was measured through Chromium's performance API after explicit garbage collection. It grew during this short run; the figures do not establish a leak-free steady state or browser process RSS. Longer timed runs remain future work. Assets are shipped in the Python package, and the recorded screenshot/API data use only generated identities. Raw output is [offline-demo-browser-2026-10-01.json](../benchmarks/results/offline-demo-browser-2026-10-01.json).

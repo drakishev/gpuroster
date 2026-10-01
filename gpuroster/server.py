@@ -6,6 +6,7 @@ import logging
 import os
 import signal
 import threading
+from contextlib import nullcontext
 from pathlib import Path
 
 from waitress import create_server, wasyncore
@@ -91,11 +92,15 @@ def serve(application, stop):
     if not _is_loopback(config["BIND_HOST"]) and not config["AUTH_USER"]:
         raise ValueError("Remote binding requires configured authentication")
     service = application.extensions["collector"]
-    with InstanceLock(config["DB_PATH"]):
+    ownership = nullcontext() if config["DEMO"] else InstanceLock(config["DB_PATH"])
+    with ownership:
         server = HTTPServer(application, config["BIND_HOST"], config["BIND_PORT"])
         try:
             service.start()
-            LOG.info("GPU Roster started with one shared collector")
+            LOG.info(
+                "GPU Roster started in %s mode with one shared collector",
+                "demo" if config["DEMO"] else "live",
+            )
             server.run(stop)
         finally:
             try:
@@ -108,7 +113,12 @@ def serve(application, stop):
 def main():
     parser = argparse.ArgumentParser(description="Serve the GPU Roster dashboard")
     parser.add_argument("--version", action="version", version=__version__)
-    parser.parse_args()
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="show synthetic data without reading hardware or writing history",
+    )
+    args = parser.parse_args()
     os.umask(0o077)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     stop = threading.Event()
@@ -118,7 +128,7 @@ def main():
     try:
         from gpuroster.app import create_app
 
-        serve(create_app(), stop)
+        serve(create_app({"DEMO": True} if args.demo else None), stop)
     except (OSError, ValueError):
         # Raw errors may include private filesystem paths or configuration.
         LOG.error("Cannot start: check settings, database lock, and listening socket")

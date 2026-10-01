@@ -2,6 +2,7 @@
 
 import copy
 import threading
+import time
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from playwright.sync_api import sync_playwright
 from werkzeug.serving import make_server
 
 import gpuroster.app as app
+from gpuroster.server import HTTPServer
 from gpuroster.settings import load_settings
 
 
@@ -128,15 +130,7 @@ class BrowserTests(unittest.TestCase):
         self.hold_stats = False
         self.stats_routes = []
         self.page.route(
-            "https://cdn.tailwindcss.com/**",
-            lambda route: route.fulfill(content_type="application/javascript", body=""),
-        )
-        self.page.route(
-            "https://cdn.tailwindcss.com/",
-            lambda route: route.fulfill(content_type="application/javascript", body=""),
-        )
-        self.page.route(
-            "https://cdn.jsdelivr.net/**",
+            "**/static/vendor/chart.umd.js",
             lambda route: route.fulfill(
                 content_type="application/javascript",
                 body="window.testCharts=[]; window.Chart=class { static defaults={}; constructor(context,config){this.data=config.data;window.testCharts.push(this)} update(){} };",
@@ -173,11 +167,18 @@ class BrowserTests(unittest.TestCase):
             )
         route.fulfill(status=404, json={"error": "unexpected_test_endpoint"})
 
+    def wait_for(self, expression):
+        # Poll through the test driver; browser-side string eval is blocked by CSP.
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if self.page.evaluate(expression):
+                return
+            self.page.wait_for_timeout(25)
+        self.fail("Browser state did not become ready: " + expression)
+
     def load(self):
         self.page.goto(self.url)
-        self.page.wait_for_function(
-            "document.getElementById('last-update').textContent !== '–'"
-        )
+        self.wait_for("document.getElementById('last-update').textContent !== '–'")
 
     def test_host_strings_render_as_text_and_filters_remain_functional(self):
         payload = '"><img src=x onerror=window.injected=true><svg onload=window.injected=true>'
@@ -287,8 +288,8 @@ class BrowserTests(unittest.TestCase):
         )
 
     def test_missing_chart_dependency_does_not_stop_metric_tables(self):
-        self.page.unroute("https://cdn.jsdelivr.net/**")
-        self.page.route("https://cdn.jsdelivr.net/**", lambda route: route.abort())
+        self.page.unroute("**/static/vendor/chart.umd.js")
+        self.page.route("**/static/vendor/chart.umd.js", lambda route: route.abort())
         self.load()
         self.assertIn("example-user", self.page.locator("#user-gpu-tbody").inner_text())
         self.assertIn(
@@ -296,13 +297,128 @@ class BrowserTests(unittest.TestCase):
         )
         self.assertFalse(self.errors)
 
+    def test_real_packaged_assets_render_without_external_requests_or_csp_errors(self):
+        self.page.unroute("**/static/vendor/chart.umd.js")
+        external = []
+
+        def local_only(route):
+            if not route.request.url.startswith(self.url + "/"):
+                external.append(route.request.url)
+                route.abort()
+            else:
+                route.fallback()
+
+        self.page.route("**/*", local_only)
+        self.page.add_init_script(
+            "window.cspViolations=[]; document.addEventListener('securitypolicyviolation', e => cspViolations.push(e.violatedDirective));"
+        )
+        self.load()
+        self.wait_for("Chart.getChart('util-chart').data.datasets.length > 0")
+        self.assertEqual(
+            self.page.evaluate(
+                "getComputedStyle(document.getElementById('gpu-grid')).display"
+            ),
+            "grid",
+        )
+        self.assertGreater(
+            self.page.locator(".bar-fill").first.bounding_box()["width"], 0
+        )
+        self.assertEqual(
+            self.page.evaluate("document.getElementById('util-chart').clientHeight"),
+            220,
+        )
+        self.page.locator('[data-util-range="week"]').click()
+        self.wait_for("Chart.getChart('util-chart').data.datasets[0].label === 'GPU 3'")
+        self.assertEqual(self.page.evaluate("cspViolations"), [])
+        self.assertFalse(external)
+        self.assertFalse(self.errors)
+
+    def test_csp_blocks_inline_scripts(self):
+        self.load()
+        self.page.evaluate(
+            "const script = document.createElement('script'); script.textContent = 'window.inlineExecution=true'; document.head.append(script)"
+        )
+        self.assertIsNone(self.page.evaluate("window.inlineExecution"))
+
+    def test_real_demo_api_and_assets_work_together_without_external_network(self):
+        demo = app.create_app(
+            {**load_settings({}), "DEMO": True, "SHOW_SESSIONS": True}
+        )
+        service = demo.extensions["collector"]
+        service.start()
+        server = HTTPServer(demo, "127.0.0.1", 0)
+        stop = threading.Event()
+        thread = threading.Thread(target=server.run, args=(stop,), daemon=True)
+        thread.start()
+        original_url = self.url
+        self.url = f"http://127.0.0.1:{server.server.effective_port}"
+        self.page.unroute_all()
+        external = []
+
+        def local_only(route):
+            if not route.request.url.startswith(self.url + "/"):
+                external.append(route.request.url)
+                route.abort()
+            else:
+                route.continue_()
+
+        self.page.route("**/*", local_only)
+        self.page.add_init_script(
+            "window.cspViolations=[]; document.addEventListener('securitypolicyviolation', e => cspViolations.push(e.violatedDirective));"
+        )
+        try:
+            self.load()
+            self.assertIn(
+                "Synthetic demo", self.page.locator("#demo-banner").inner_text()
+            )
+            self.assertEqual(
+                self.page.locator("#connection-status").inner_text(), "DEMO"
+            )
+            self.assertEqual(self.page.locator(".gpu-card").count(), 4)
+            self.assertIn(
+                "demo-alex", self.page.locator("#user-gpu-tbody").inner_text()
+            )
+            self.wait_for(
+                "document.getElementById('session-tbody').textContent.includes('demo-alex')"
+            )
+            self.page.locator('[data-util-range="month"]').click()
+            self.wait_for(
+                "Chart.getChart('util-chart').data.labels.length > 100 && document.getElementById('util-chart-title').textContent.includes('Last 30 days')"
+            )
+            self.assertEqual(
+                self.page.evaluate("Chart.getChart('util-chart').data.datasets.length"),
+                4,
+            )
+            self.page.set_viewport_size({"width": 390, "height": 844})
+            self.wait_for("document.documentElement.scrollWidth <= window.innerWidth")
+            self.assertFalse(external)
+            self.assertEqual(self.page.evaluate("cspViolations"), [])
+            self.assertFalse(self.errors)
+        finally:
+            self.page.goto("about:blank")
+            self.url = original_url
+            stop.set()
+            thread.join(3)
+            server.close()
+            service.stop()
+
+    def test_demo_label_survives_request_failure(self):
+        with patch.dict(application.config, {"DEMO": True}):
+            self.load()
+        self.status = 503
+        self.page.evaluate("fetchStats()")
+        self.assertIn("Synthetic demo", self.page.locator("#demo-banner").inner_text())
+        self.assertEqual(
+            self.page.locator("#connection-status").inner_text(), "PARTIAL"
+        )
+
     def test_charts_keep_midnight_order_and_update_gpu_identity(self):
         self.load()
         self.assertEqual(
             self.page.evaluate("testCharts[0].data.labels"), ["23:59:59", "00:00:02"]
         )
         self.page.locator('[data-util-range="week"]').click()
-        self.page.wait_for_function("testCharts[0].data.datasets[0].label === 'GPU 3'")
+        self.wait_for("testCharts[0].data.datasets[0].label === 'GPU 3'")
         self.assertFalse(self.errors)
 
     def test_late_history_response_cannot_replace_live_selection(self):
@@ -345,7 +461,7 @@ class BrowserTests(unittest.TestCase):
         self.page.wait_for_timeout(100)
         self.assertEqual(self.requests.count("/api/stats"), count)
         self.page.clock.fast_forward(10000)
-        self.page.wait_for_function("panelErrors.has('statsRequest')")
+        self.wait_for("panelErrors.has('statsRequest')")
         self.assertIn(
             "could not be refreshed", self.page.locator("#status-banner").inner_text()
         )

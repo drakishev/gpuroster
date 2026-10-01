@@ -1,6 +1,6 @@
 # Linux deployment
 
-Use the installed `gpuroster` command under a service manager. It runs Waitress with four request threads, one collector thread, and at most one NVML worker. A bare Flask/WSGI import does not start collection. Multiple web workers and network-filesystem history are not supported. See [ADR-004](architecture/ADR-004-production-deployment.md).
+Use the installed `gpuroster` command under a service manager. For actual monitoring, leave `GPUROSTER_DEMO` unset or `0` and omit `--demo`; demo mode deliberately does not monitor the host or persist history. It runs Waitress with four request threads, one collector thread, and at most one NVML worker. A bare Flask/WSGI import does not start collection. Multiple web workers and network-filesystem history are not supported. See [ADR-004](architecture/ADR-004-production-deployment.md).
 
 ## Install the package
 
@@ -11,7 +11,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install build==1.6.1
 .venv/bin/python -m build
 sudo python3 -m venv /opt/gpuroster/venv
-sudo /opt/gpuroster/venv/bin/python -m pip install dist/gpuroster-0.3.0-py3-none-any.whl
+sudo /opt/gpuroster/venv/bin/python -m pip install dist/gpuroster-0.4.0-py3-none-any.whl
 /opt/gpuroster/venv/bin/gpuroster --version
 ```
 
@@ -51,7 +51,7 @@ curl --fail --user viewer http://127.0.0.1:18081/api/stats
 
 Snapshot output contains host metrics and process owners: inspect it locally and do not paste it into public issues. HTTP 503 `collector_not_ready` is expected before the first publication. Afterwards, HTTP 200 means a snapshot is available, not that all sources are healthy. Check `health.sources`, ages, and sequence advancement. A host without NVIDIA support should serve the page with visibly unavailable GPU metrics.
 
-`journalctl -u gpuroster` contains startup/shutdown and safe collection error codes. The launcher does not log credentials, raw command errors, or an access log. Third-party server errors may include request-related details; keep service logs private. Tailwind and Chart.js still require CDN access; offline assets are the next frontend task.
+`journalctl -u gpuroster` contains startup/shutdown and safe collection error codes. The launcher does not log credentials, raw command errors, or an access log. Third-party server errors may include request-related details; keep service logs private. Styles and Chart.js are packaged and served by the application; browsers need no CDN access.
 
 ## Ownership and shutdown
 
@@ -71,7 +71,7 @@ The first collector write retains the Phase 2 additive `gpu_uuid` migration and 
 
 ```bash
 python3 -m venv /tmp/gpuroster-install
-/tmp/gpuroster-install/bin/python -m pip install dist/gpuroster-0.3.0-py3-none-any.whl
+/tmp/gpuroster-install/bin/python -m pip install dist/gpuroster-0.4.0-py3-none-any.whl
 python3 scripts/smoke_install.py /tmp/gpuroster-install/bin/gpuroster
 ```
 

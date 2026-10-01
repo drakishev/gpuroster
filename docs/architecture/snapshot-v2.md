@@ -5,6 +5,7 @@
 | Field | Meaning |
 | --- | --- |
 | `schema_version` | `2` |
+| `mode` | `live` or `demo`; demo measurements are generated, never host data |
 | `sequence` | Increases once per published collector cycle; resets after process restart |
 | `timestamp` | UTC ISO timestamp at cycle start; never request time |
 | `collector.backend` | Actual selected provider: `nvml` or `nvidia-smi` |
@@ -30,3 +31,5 @@ Staleness uses a monotonic clock, with a threshold of the greater of 15 seconds 
 Session routes retain their object/list shapes and add `X-Snapshot-Sequence`. They read cached evidence, are disabled by default (403), and return 503 if required sources are unavailable or stale. Session `login`/`logout` timestamps are UTC ISO strings or `active`. Estimates use unioned connected intervals, not terminal-hours or GPU-hours.
 
 `GET /api/gpu_history?range=today|week|month` reads SQLite, with UTC ISO labels and datasets containing `id`, `gpu`, `label`, and nullable `data`. `id` is a UUID or `legacy:index:N`; legacy and known identities never merge. A missing database produces 503 without creating a file. Historical reads do not poll hardware.
+
+`X-GPU-Roster-Mode: live` or `demo` accompanies every response, including list-valued session endpoints. Historical JSON also includes `mode`. Demo history uses generated values and no SQLite file; its source health refers to the synthetic provider. Mode is selected at startup and cannot be changed through an API request.
