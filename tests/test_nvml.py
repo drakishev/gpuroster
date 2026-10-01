@@ -3,9 +3,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from monitoring.collectors import CollectionError, CommandRunner
-from monitoring.models import GPU
-from monitoring.nvml import AutoGPU, NVMLWorker, read_nvml
+from gpuroster.monitoring.collectors import CollectionError, CommandRunner
+from gpuroster.monitoring.models import GPU
+from gpuroster.monitoring.nvml import AutoGPU, NVMLWorker, read_nvml
 
 
 def stalled_worker(connection):
@@ -105,7 +105,7 @@ class NVMLTests(unittest.TestCase):
         provider = NVMLWorker()
         provider.rows = (("GPU-example", 123, 1),)
         with patch(
-            "monitoring.nvml.process_description",
+            "gpuroster.monitoring.nvml.process_description",
             return_value=("example-user", "python"),
         ) as describe:
             rows = provider.processes((GPU(2, "GPU-example", "GPU", 0, 0, 1, 20, 0),))

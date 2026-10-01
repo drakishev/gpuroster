@@ -10,8 +10,11 @@ from urllib.parse import parse_qs, urlsplit
 from playwright.sync_api import sync_playwright
 from werkzeug.serving import make_server
 
-import app
-from settings import load_settings
+import gpuroster.app as app
+from gpuroster.settings import load_settings
+
+
+application = app.create_app()
 
 
 def snapshot():
@@ -67,19 +70,19 @@ class BrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.configuration = patch.dict(
-            app.app.config, {**load_settings({}), "SHOW_SESSIONS": True}
+            application.config, {**load_settings({}), "SHOW_SESSIONS": True}
         )
         cls.configuration.start()
         cls.collectors = []
         for name in ("snapshot",):
             guard = patch.object(
-                app.app.extensions["collector"],
+                application.extensions["collector"],
                 name,
                 side_effect=AssertionError("Browser tests must use synthetic fixtures"),
             )
             guard.start()
             cls.collectors.append(guard)
-        cls.server = make_server("127.0.0.1", 0, app.app, threaded=True)
+        cls.server = make_server("127.0.0.1", 0, application, threaded=True)
         cls.server_thread = threading.Thread(
             target=cls.server.serve_forever, daemon=True
         )
@@ -323,7 +326,7 @@ class BrowserTests(unittest.TestCase):
         self.assertNotIn("OLD", self.page.evaluate("testCharts[0].data.labels"))
 
     def test_default_privacy_makes_no_session_requests(self):
-        with patch.dict(app.app.config, {"SHOW_SESSIONS": False}):
+        with patch.dict(application.config, {"SHOW_SESSIONS": False}):
             self.load()
         self.assertNotIn("/api/sessions", self.requests)
         self.assertNotIn("/api/login_stats", self.requests)

@@ -30,7 +30,7 @@ jobs:
       - run: python -m pip check
       - run: ruff check .
       - run: ruff format --check .
-      - run: node --check static/dashboard.js
+      - run: node --check gpuroster/static/dashboard.js
       - run: bash -n start.sh
       - run: git diff --check
 
@@ -76,3 +76,25 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install pip-audit==2.10.1
       - run: pip-audit -r requirements.txt
+
+  packaging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install build==1.6.1
+      - run: python -m build
+      - name: Install wheel in an isolated environment
+        run: |
+          python -m venv "$RUNNER_TEMP/gpuroster-install"
+          "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip check
+      - name: Test installed launcher outside checkout without GPU tools
+        run: python scripts/smoke_install.py "$RUNNER_TEMP/gpuroster-install/bin/gpuroster"

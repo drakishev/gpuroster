@@ -3,8 +3,12 @@
 import multiprocessing
 import os
 
-from monitoring.collectors import CollectionError, NvidiaSMI, process_description
-from monitoring.models import GPU, GPUProcess
+from gpuroster.monitoring.collectors import (
+    CollectionError,
+    NvidiaSMI,
+    process_description,
+)
+from gpuroster.monitoring.models import GPU, GPUProcess
 
 
 def read_nvml(nvml):
@@ -62,6 +66,8 @@ def nvml_worker(connection):
     # loading the driver. They are never included in worker messages.
     os.environ.pop("GPUROSTER_AUTH_USER", None)
     os.environ.pop("GPUROSTER_AUTH_PASSWORD", None)
+    os.environ.pop("GPUROSTER_AUTH_PASSWORD_FILE", None)
+    os.environ.pop("CREDENTIALS_DIRECTORY", None)
     try:
         import pynvml
 

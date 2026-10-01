@@ -5,8 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from monitoring.history import HistoryStore, RollingHistory
-from monitoring.models import GPU
+from gpuroster.monitoring.history import HistoryStore, RollingHistory
+from gpuroster.monitoring.models import GPU
 
 
 class HistoryTests(unittest.TestCase):
@@ -59,7 +59,7 @@ class HistoryTests(unittest.TestCase):
         self.store.initialize()
         with (
             patch(
-                "monitoring.history.sqlite3.connect",
+                "gpuroster.monitoring.history.sqlite3.connect",
                 side_effect=sqlite3.OperationalError("test-only"),
             ),
             self.assertRaises(sqlite3.Error),

@@ -1,0 +1,54 @@
+[
+  {
+    "server": "werkzeug",
+    "clients": 1,
+    "duration_s": 5.001,
+    "api_requests": 25,
+    "failures": 0,
+    "hardware_cycles": 20,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 0.184,
+    "peak_rss_kib": 38348,
+    "median_ms": 5.327,
+    "p95_ms": 10.185
+  },
+  {
+    "server": "werkzeug",
+    "clients": 5,
+    "duration_s": 5.002,
+    "api_requests": 125,
+    "failures": 0,
+    "hardware_cycles": 20,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 0.73,
+    "peak_rss_kib": 40940,
+    "median_ms": 5.967,
+    "p95_ms": 20.219
+  },
+  {
+    "server": "werkzeug",
+    "clients": 20,
+    "duration_s": 5.014,
+    "api_requests": 500,
+    "failures": 0,
+    "hardware_cycles": 20,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 2.232,
+    "peak_rss_kib": 48052,
+    "median_ms": 8.284,
+    "p95_ms": 37.664
+  },
+  {
+    "server": "werkzeug",
+    "clients": 50,
+    "duration_s": 5.26,
+    "api_requests": 1065,
+    "failures": 0,
+    "hardware_cycles": 21,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 5.282,
+    "peak_rss_kib": 61048,
+    "median_ms": 244.186,
+    "p95_ms": 271.851
+  }
+]

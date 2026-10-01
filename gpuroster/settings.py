@@ -2,6 +2,7 @@
 
 import math
 import os
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -16,6 +17,16 @@ def load_settings(environ=None):
 
     username = env.get("GPUROSTER_AUTH_USER", "")
     password = env.get("GPUROSTER_AUTH_PASSWORD", "")
+    password_file = env.get("GPUROSTER_AUTH_PASSWORD_FILE", "")
+    if password_file:
+        if password:
+            raise ValueError("Choose a password or a password file, not both")
+        try:
+            password = Path(password_file).read_text(encoding="utf-8").rstrip("\r\n")
+        except (OSError, UnicodeError):
+            raise ValueError("Cannot read GPUROSTER_AUTH_PASSWORD_FILE") from None
+        if not password or "\n" in password or "\r" in password:
+            raise ValueError("Password file must contain one nonempty line")
     if bool(username) != bool(password):
         raise ValueError("Set both GPUROSTER_AUTH_USER and GPUROSTER_AUTH_PASSWORD")
     timeout = float(env.get("GPUROSTER_COMMAND_TIMEOUT", "3"))
@@ -55,6 +66,11 @@ def load_settings(environ=None):
         "GPU_BACKEND": backend,
         "TIMEZONE": timezone_name,
         "DB_PATH": env.get(
-            "GPUROSTER_DB_PATH", os.path.join(os.path.dirname(__file__), "gpu_stats.db")
+            "GPUROSTER_DB_PATH",
+            str(
+                Path(env.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+                / "gpuroster"
+                / "history.db"
+            ),
         ),
     }

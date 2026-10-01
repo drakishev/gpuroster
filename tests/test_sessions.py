@@ -2,8 +2,8 @@ import unittest
 from datetime import datetime
 from unittest.mock import Mock, patch
 
-from monitoring.models import Session
-from monitoring.sessions import (
+from gpuroster.monitoring.models import Session
+from gpuroster.monitoring.sessions import (
     SessionCollector,
     parse_records,
     summarize,
@@ -99,9 +99,12 @@ class SessionTests(unittest.TestCase):
             process.exe.return_value = path
             processes.append(process)
         with (
-            patch("monitoring.sessions.psutil.process_iter", return_value=processes),
             patch(
-                "monitoring.sessions.os.stat",
+                "gpuroster.monitoring.sessions.psutil.process_iter",
+                return_value=processes,
+            ),
+            patch(
+                "gpuroster.monitoring.sessions.os.stat",
                 return_value=Mock(st_uid=0, st_mode=0o100755),
             ),
         ):
@@ -118,10 +121,11 @@ class SessionTests(unittest.TestCase):
         for uid, mode in [(1000, 0o100755), (0, 0o100777)]:
             with (
                 patch(
-                    "monitoring.sessions.psutil.process_iter", return_value=[process]
+                    "gpuroster.monitoring.sessions.psutil.process_iter",
+                    return_value=[process],
                 ),
                 patch(
-                    "monitoring.sessions.os.stat",
+                    "gpuroster.monitoring.sessions.os.stat",
                     return_value=Mock(st_uid=uid, st_mode=mode),
                 ),
             ):

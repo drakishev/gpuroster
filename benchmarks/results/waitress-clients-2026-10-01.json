@@ -1,0 +1,54 @@
+[
+  {
+    "server": "waitress",
+    "clients": 1,
+    "duration_s": 5.001,
+    "api_requests": 25,
+    "failures": 0,
+    "hardware_cycles": 20,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 0.149,
+    "peak_rss_kib": 38028,
+    "median_ms": 4.107,
+    "p95_ms": 7.168
+  },
+  {
+    "server": "waitress",
+    "clients": 5,
+    "duration_s": 5.002,
+    "api_requests": 125,
+    "failures": 0,
+    "hardware_cycles": 20,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 0.661,
+    "peak_rss_kib": 40492,
+    "median_ms": 5.253,
+    "p95_ms": 17.93
+  },
+  {
+    "server": "waitress",
+    "clients": 20,
+    "duration_s": 5.008,
+    "api_requests": 500,
+    "failures": 0,
+    "hardware_cycles": 20,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 2.133,
+    "peak_rss_kib": 47880,
+    "median_ms": 6.713,
+    "p95_ms": 32.906
+  },
+  {
+    "server": "waitress",
+    "clients": 50,
+    "duration_s": 5.184,
+    "api_requests": 1218,
+    "failures": 0,
+    "hardware_cycles": 20,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 5.058,
+    "peak_rss_kib": 61364,
+    "median_ms": 49.945,
+    "p95_ms": 197.663
+  }
+]

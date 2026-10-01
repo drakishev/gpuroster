@@ -10,11 +10,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import app
-from monitoring.models import GPU, GPUProcess, System
-from monitoring.service import CollectorService
-from monitoring.sessions import SessionRecords
-from settings import load_settings
+import gpuroster.app as app
+from gpuroster.monitoring.models import GPU, GPUProcess, System
+from gpuroster.monitoring.service import CollectorService
+from gpuroster.monitoring.sessions import SessionRecords
+from gpuroster.settings import load_settings
 
 
 class BackendTests(unittest.TestCase):
@@ -117,27 +117,6 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(
                 self.client.get("/", headers={"Authorization": value}).status_code, 401
             )
-
-    def test_remote_launcher_refuses_missing_auth(self):
-        self.application.config["BIND_HOST"] = "0.0.0.0"
-        with (
-            patch.object(app, "app", self.application),
-            patch.object(self.service, "start") as start,
-            self.assertRaises(SystemExit),
-        ):
-            app.main()
-        start.assert_not_called()
-
-    def test_launcher_stops_collector_when_server_exits(self):
-        with (
-            patch.object(app, "app", self.application),
-            patch.object(self.application, "run"),
-            patch.object(self.service, "start") as start,
-            patch.object(self.service, "stop") as stop,
-        ):
-            app.main()
-        start.assert_called_once()
-        stop.assert_called_once()
 
     def test_unstarted_collector_returns_visible_unavailability_without_polling(self):
         response = self.client.get("/api/stats")

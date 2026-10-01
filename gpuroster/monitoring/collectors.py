@@ -8,7 +8,7 @@ import time
 
 import psutil
 
-from monitoring.models import GPU, GPUProcess, System
+from gpuroster.monitoring.models import GPU, GPUProcess, System
 
 
 class CollectionError(RuntimeError):
@@ -25,7 +25,13 @@ class CommandRunner:
         environment = {
             key: value
             for key, value in os.environ.items()
-            if key not in {"GPUROSTER_AUTH_USER", "GPUROSTER_AUTH_PASSWORD"}
+            if key
+            not in {
+                "GPUROSTER_AUTH_USER",
+                "GPUROSTER_AUTH_PASSWORD",
+                "GPUROSTER_AUTH_PASSWORD_FILE",
+                "CREDENTIALS_DIRECTORY",
+            }
         }
         environment.update(LC_ALL="C", TZ="UTC")
         try:
