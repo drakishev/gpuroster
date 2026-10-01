@@ -46,3 +46,26 @@ staleness even without writes. Include query time and age in responses. Keep
 query work outside the hardware collector, preserve read-only legacy access,
 and report refresh failures explicitly. Measure the same workload before
 deciding whether more complex preaggregation or background refresh is needed.
+
+## Cache comparison
+
+The same ten-second workload with the shared query cache:
+
+| Clients | History requests / SQL queries | Live p95 (ms) | History p95 (ms) | CPU seconds | Source cycles |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 2 / 1 | 7.356 | 230.652 | 0.528 | 40 |
+| 5 | 10 / 1 | 24.949 | 275.552 | 1.495 | 40 |
+| 20 | 40 / 1 | 19.103 | 334.232 | 4.679 | 40 |
+| 50 | 100 / 1 | 358.274 | 519.367 | 10.382 | 40 |
+
+All responses succeeded. The 50-client case delivered 1,976 live responses
+instead of 942. Its live median was 244.094 ms versus 219.136 ms before: sharing
+reduced the long tail and increased delivered work, but this accelerated load
+still queues requests. The one-client history p95 represents the single cold
+query and did not improve; caching does not speed up an individual SQL scan.
+Results are one run per case, not confidence intervals or capacity guarantees.
+Raw output: [history-load-cached-2026-10-01.json](../../benchmarks/results/history-load-cached-2026-10-01.json).
+
+The improvement justifies the cache implementation. Acceptance still requires
+the longer mixed workload across successful writes; [ADR-006](../architecture/ADR-006-shared-history-queries.md)
+records its consistency and failure semantics.

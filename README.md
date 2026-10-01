@@ -123,11 +123,12 @@ flowchart LR
     Collector --> Cache["Atomic snapshot + source health"]
     Collector --> History["Rolling history + SQLite writer"]
     Cache --> API["Flask API"]
-    History --> API
+    History --> Queries["Shared history queries · 60 s maximum reuse"]
+    Queries --> API
     API --> Clients["Many browser clients"]
 ```
 
-The collector runs in one thread in the web process. NVML calls run in one persistent child process so a stalled driver call can time out and the worker can be restarted. CLI collection remains available. API requests copy published snapshots; they never poll hardware. Historical API requests query SQLite directly.
+The collector runs in one thread in the web process. NVML calls run in one persistent child process so a stalled driver call can time out and the worker can be restarted. CLI collection remains available. API requests copy published snapshots; they never poll hardware. Historical requests share SQLite results per range, refreshing after successful writes and at most 60 seconds after a query began. Responses expose query time/age separately from current writer health. See [ADR-006](docs/architecture/ADR-006-shared-history-queries.md).
 
 Collection attempts use a monotonic schedule and skip missed intervals rather than accumulating work. Snapshots carry a sequence number, UTC collection timestamp, backend name, and source ages. An HTTP response does not make an old measurement fresh. The first CPU interval is unknown until the collector has a baseline.
 
@@ -156,7 +157,7 @@ Connected time is the union of a user's session intervals, clipped to each windo
 
 The launcher uses Waitress with four HTTP threads, one collector thread, and a child NVML worker. A local advisory lock rejects a second launcher using the same database. SIGINT and SIGTERM stop the HTTP loop and collector; in-flight responses may be interrupted during shutdown. Use one instance on a local filesystem. The cache is process-local: there is no supported multi-worker web deployment yet.
 
-Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-driver or MIG compatibility certification. Slow OS process inspection can still delay a collection cycle, while clients continue to receive cached data with age/status. History aggregation currently runs per request. Larger retention, downsampling, and an independent collector service remain future architecture work.
+Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-driver or MIG compatibility certification. Slow OS process inspection can still delay a collection cycle, while clients continue to receive cached data with age/status. Cold history queries still occupy HTTP threads; shared results avoid duplicate aggregation. Larger retention, downsampling, and an independent collector service remain future architecture work.
 
 Connected-time estimates now handle overlap and window boundaries, but login logs may be rotated, truncated, incomplete, or inaccessible. SSH process visibility depends on OS permissions. These estimates are not billing records or GPU usage time.
 

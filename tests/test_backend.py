@@ -176,6 +176,39 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(response.json["health"]["status"], "ok")
         self.gpu.gpus.assert_called_once()
 
+    def test_shared_history_retains_query_time_but_reports_latest_writer_health(self):
+        self.ready()
+        with patch.object(
+            self.service.store, "read", wraps=self.service.store.read
+        ) as read:
+            first = self.client.get("/api/gpu_history?range=month").json
+            self.service.store.write = Mock(
+                side_effect=RuntimeError("PRIVATE_TEST_MARKER")
+            )
+            self.service.collect_once()
+            response = self.client.get("/api/gpu_history?range=month")
+            second = response.json
+            read.assert_called_once()
+        self.assertEqual(first["query"]["as_of"], second["query"]["as_of"])
+        self.assertEqual(first["health"]["status"], "ok")
+        self.assertEqual(second["health"]["status"], "unavailable")
+        self.assertNotIn(b"PRIVATE_TEST_MARKER", response.data)
+
+    def test_auth_and_invalid_range_precede_history_queries(self):
+        with patch.object(
+            self.application.extensions["history_queries"], "read"
+        ) as read:
+            self.enable_auth()
+            self.assertEqual(self.client.get("/api/gpu_history").status_code, 401)
+            headers = self.enable_auth()
+            self.assertEqual(
+                self.client.get(
+                    "/api/gpu_history?range=invalid", headers=headers
+                ).status_code,
+                400,
+            )
+            read.assert_not_called()
+
     def test_enabled_session_endpoints_use_one_cached_collection(self):
         self.service.config["SHOW_SESSIONS"] = self.application.config[
             "SHOW_SESSIONS"

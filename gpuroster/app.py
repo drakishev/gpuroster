@@ -3,11 +3,11 @@
 import hmac
 import ipaddress
 import sqlite3
-import time
 from urllib.parse import urlsplit
 
 from flask import Flask, current_app, jsonify, render_template, request
 
+from gpuroster.monitoring.history_cache import HistoryQueryCache
 from gpuroster.monitoring.service import CollectorService
 from gpuroster.settings import load_settings
 
@@ -27,6 +27,9 @@ def create_app(config=None, collector=None):
                 application.config, application.config["DB_PATH"]
             )
     application.extensions["collector"] = collector
+    application.extensions["history_queries"] = HistoryQueryCache(
+        collector.store, application.config["TIMEZONE"]
+    )
     application.before_request(protect_access)
     application.after_request(protect_responses)
     application.add_url_rule("/", view_func=index)
@@ -139,11 +142,10 @@ def api_gpu_history():
     range_key = request.args.get("range", "today")
     if range_key not in {"today", "week", "month"}:
         return jsonify(error="invalid_range"), 400
-    service = collector()
-    health = service.snapshot()["health"]["sources"]["history"]
-    result = service.store.read(range_key, time.time(), current_app.config["TIMEZONE"])
+    result = current_app.extensions["history_queries"].read(range_key)
     result["mode"] = "demo" if current_app.config["DEMO"] else "live"
-    result["health"] = health
+    # Writer health is current even when the query result was reused.
+    result["health"] = collector().snapshot()["health"]["sources"]["history"]
     return jsonify(result)
 
 

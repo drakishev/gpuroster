@@ -1,0 +1,226 @@
+[
+  {
+    "clients": 1,
+    "duration_s": 10.001,
+    "stats_interval_s": 0.2,
+    "history_interval_s": 5.0,
+    "seed_rows": 345600,
+    "db_bytes": 24825856,
+    "hardware_cycles": 40,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 0.528,
+    "failures": {
+      "stats": 0,
+      "history": 0
+    },
+    "http": {
+      "stats": {
+        "count": 50,
+        "median_ms": 4.219,
+        "p95_ms": 7.356,
+        "max_ms": 14.453
+      },
+      "history": {
+        "count": 2,
+        "median_ms": 118.415,
+        "p95_ms": 230.652,
+        "max_ms": 230.652
+      }
+    },
+    "sql_reads": {
+      "count": 1,
+      "median_ms": 223.929,
+      "p95_ms": 223.929,
+      "max_ms": 223.929
+    },
+    "sql_writes": {
+      "count": 1,
+      "median_ms": 1.985,
+      "p95_ms": 1.985,
+      "max_ms": 1.985
+    },
+    "write_errors": 0,
+    "rss_samples": [
+      {
+        "seconds": 0,
+        "rss_bytes": 38965248
+      },
+      {
+        "seconds": 5.002,
+        "rss_bytes": 45420544
+      },
+      {
+        "seconds": 10.001,
+        "rss_bytes": 45420544
+      }
+    ]
+  },
+  {
+    "clients": 5,
+    "duration_s": 10.005,
+    "stats_interval_s": 0.2,
+    "history_interval_s": 5.0,
+    "seed_rows": 345600,
+    "db_bytes": 24825856,
+    "hardware_cycles": 40,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 1.495,
+    "failures": {
+      "stats": 0,
+      "history": 0
+    },
+    "http": {
+      "stats": {
+        "count": 250,
+        "median_ms": 5.639,
+        "p95_ms": 24.949,
+        "max_ms": 75.144
+      },
+      "history": {
+        "count": 10,
+        "median_ms": 138.665,
+        "p95_ms": 275.552,
+        "max_ms": 275.552
+      }
+    },
+    "sql_reads": {
+      "count": 1,
+      "median_ms": 237.415,
+      "p95_ms": 237.415,
+      "max_ms": 237.415
+    },
+    "sql_writes": {
+      "count": 1,
+      "median_ms": 2.689,
+      "p95_ms": 2.689,
+      "max_ms": 2.689
+    },
+    "write_errors": 0,
+    "rss_samples": [
+      {
+        "seconds": 0,
+        "rss_bytes": 38825984
+      },
+      {
+        "seconds": 5.01,
+        "rss_bytes": 47865856
+      },
+      {
+        "seconds": 10.002,
+        "rss_bytes": 47865856
+      }
+    ]
+  },
+  {
+    "clients": 20,
+    "duration_s": 10.018,
+    "stats_interval_s": 0.2,
+    "history_interval_s": 5.0,
+    "seed_rows": 345600,
+    "db_bytes": 24825856,
+    "hardware_cycles": 40,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 4.679,
+    "failures": {
+      "stats": 0,
+      "history": 0
+    },
+    "http": {
+      "stats": {
+        "count": 997,
+        "median_ms": 4.101,
+        "p95_ms": 19.103,
+        "max_ms": 345.545
+      },
+      "history": {
+        "count": 40,
+        "median_ms": 143.225,
+        "p95_ms": 334.232,
+        "max_ms": 343.293
+      }
+    },
+    "sql_reads": {
+      "count": 1,
+      "median_ms": 210.574,
+      "p95_ms": 210.574,
+      "max_ms": 210.574
+    },
+    "sql_writes": {
+      "count": 1,
+      "median_ms": 2.956,
+      "p95_ms": 2.956,
+      "max_ms": 2.956
+    },
+    "write_errors": 0,
+    "rss_samples": [
+      {
+        "seconds": 0,
+        "rss_bytes": 38789120
+      },
+      {
+        "seconds": 5.037,
+        "rss_bytes": 55496704
+      },
+      {
+        "seconds": 10.004,
+        "rss_bytes": 55767040
+      }
+    ]
+  },
+  {
+    "clients": 50,
+    "duration_s": 10.206,
+    "stats_interval_s": 0.2,
+    "history_interval_s": 5.0,
+    "seed_rows": 345600,
+    "db_bytes": 24825856,
+    "hardware_cycles": 40,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 10.382,
+    "failures": {
+      "stats": 0,
+      "history": 0
+    },
+    "http": {
+      "stats": {
+        "count": 1976,
+        "median_ms": 244.094,
+        "p95_ms": 358.274,
+        "max_ms": 544.845
+      },
+      "history": {
+        "count": 100,
+        "median_ms": 351.615,
+        "p95_ms": 519.367,
+        "max_ms": 540.338
+      }
+    },
+    "sql_reads": {
+      "count": 1,
+      "median_ms": 240.348,
+      "p95_ms": 240.348,
+      "max_ms": 240.348
+    },
+    "sql_writes": {
+      "count": 1,
+      "median_ms": 2.41,
+      "p95_ms": 2.41,
+      "max_ms": 2.41
+    },
+    "write_errors": 0,
+    "rss_samples": [
+      {
+        "seconds": 0,
+        "rss_bytes": 38785024
+      },
+      {
+        "seconds": 5.081,
+        "rss_bytes": 63664128
+      },
+      {
+        "seconds": 10.005,
+        "rss_bytes": 70955008
+      }
+    ]
+  }
+]
