@@ -165,6 +165,9 @@ An optional [read-only hardware validation command](docs/validation/hardware.md)
 checks NVML/CLI agreement, native worker memory, and worker recovery on a target
 host. Ordinary CI remains hardware-independent. The collector reports physical
 GPUs; per-MIG-instance monitoring is not implemented.
+The [Phase 7 results](docs/validation/phase-seven.md) record a passing 15-minute
+eight-GPU observation and bounded synthetic identity retention, with explicit
+driver and permission coverage limits.
 
 The launcher uses Waitress with four HTTP threads, one collector thread, and a child NVML worker. A local advisory lock rejects a second launcher using the same database. SIGINT and SIGTERM stop the HTTP loop and collector; in-flight responses may be interrupted during shutdown. Use one instance on a local filesystem. The cache is process-local: there is no supported multi-worker web deployment yet.
 
