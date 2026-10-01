@@ -133,6 +133,37 @@ class HistoryTests(unittest.TestCase):
         history.append([], self.now + 400)
         self.assertEqual(history.to_dict(), {})
 
+    def test_repeated_identity_churn_bounds_all_rolling_history_state(self):
+        history = RollingHistory(interval=3, length=12)
+        for cycle in range(300):
+            devices = tuple(
+                GPU(
+                    index,
+                    f"GPU-synthetic-{cycle}-{index}",
+                    "Synthetic",
+                    50,
+                    0,
+                    100,
+                    30,
+                    20,
+                )
+                for index in range(8)
+            )
+            history.append(devices, self.now + cycle * 3)
+            keys = set(history.series)
+            self.assertLessEqual(len(keys), 8 * 13)
+            self.assertEqual(keys, set(history.devices))
+            self.assertEqual(keys, set(history.last_seen))
+            self.assertEqual(set(history.ema), {device.uuid for device in devices})
+            self.assertTrue(
+                all(len(points) <= 12 for points in history.series.values())
+            )
+        history.append((), self.now + (300 + 13) * 3)
+        self.assertEqual(history.to_dict(), {})
+        self.assertEqual(history.devices, {})
+        self.assertEqual(history.last_seen, {})
+        self.assertEqual(history.ema, {})
+
 
 if __name__ == "__main__":
     unittest.main()

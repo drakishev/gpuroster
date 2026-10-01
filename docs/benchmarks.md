@@ -2,6 +2,18 @@
 
 Recorded 2026-10-01 on one Linux host, using Python 3.12. Results are observations, not production capacity or cross-driver guarantees. Committed output contains aggregate measurements and synthetic data only. No benchmark databases or real process/device identities are included.
 
+## Rolling-history identity churn
+
+The [accelerated churn experiment](research/identity-churn.md) replaces all eight
+GPU identities every tick across ten retention windows. All 9,600 synthetic
+identities obeyed the 968-identity retention bound; all state expired after the
+final gap. Second-half traced Python allocations stayed in a 2,248-byte band.
+This measures the history model with simulated time, not an end-to-end soak.
+
+```bash
+python -m benchmarks.identity_churn
+```
+
 ## GPU backends
 
 Hypothesis: NVML reduces steady-state latency and CPU cost while preserving requested metrics. [Method, alternatives, and direct NVML/CLI results](research/gpu-backends.md) cover 30 samples per case at 1/4/8 GPUs. The CLI harness uses two subprocesses per sample; NVML initializes once and queries the corresponding device/process information.
