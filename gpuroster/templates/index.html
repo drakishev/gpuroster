@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GPU Monitor</title>
+  <title>GPU Monitor{% if config['DEMO'] %} · Demo{% endif %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
   <script src="{{ url_for('static', filename='vendor/chart.umd.js') }}" defer></script>
 </head>
-<body class="min-h-screen p-4 lg:p-6" data-sessions-enabled="{{ 'true' if config['SHOW_SESSIONS'] else 'false' }}" data-request-timeout-ms="{{ (config['COMMAND_TIMEOUT'] * 3000 + 5000)|int }}">
+<body class="min-h-screen p-4 lg:p-6" data-demo="{{ 'true' if config['DEMO'] else 'false' }}" data-sessions-enabled="{{ 'true' if config['SHOW_SESSIONS'] else 'false' }}" data-request-timeout-ms="{{ (config['COMMAND_TIMEOUT'] * 3000 + 5000)|int }}">
 
 <!-- Header -->
 <div class="flex items-center justify-between mb-6">
@@ -21,6 +21,9 @@
   </div>
 </div>
 
+{% if config['DEMO'] %}
+<div id="demo-banner" class="card p-4 mb-4 text-sm border-amber-500 text-amber-200" role="note"><strong>Synthetic demo.</strong> GPUs, users, system metrics, and history are generated. No host monitoring or saved data.</div>
+{% endif %}
 <div id="status-banner" class="card p-4 mb-4 text-sm" role="status" aria-live="polite">Waiting for the first update…</div>
 
 <!-- System Stats Row -->
@@ -64,7 +67,7 @@
 
 <!-- GPU Utilization History Chart -->
 <div class="card p-5 mb-6">
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div class="section-title section-heading" id="util-chart-title">GPU Utilization</div>
     <div class="flex gap-2">
       <button data-util-range="live"  id="btn-util-live"
@@ -126,7 +129,7 @@
 {% if config['SHOW_SESSIONS'] %}
 <!-- Login / Usage Stats -->
 <div class="card p-5 mb-6">
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div class="section-title section-heading">Estimated Connected Time per User · {{ config['TIMEZONE'] }}</div>
     <div class="flex gap-2">
       <button data-login-period="today" id="btn-today"

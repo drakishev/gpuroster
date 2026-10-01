@@ -1,6 +1,7 @@
 /* Host-provided values are always text nodes or DOM properties, never HTML. */
 const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#10b981', '#06b6d4'];
 const sessionsEnabled = document.body.dataset.sessionsEnabled === 'true';
+const demoMode = document.body.dataset.demo === 'true';
 const requestTimeout = Number(document.body.dataset.requestTimeoutMs) || 14000;
 const panelErrors = new Map();
 let lastSuccess = 0;
@@ -57,7 +58,7 @@ function userColor(user) {
 function showStatus() {
   const stale = collectionStale || (lastSuccess && Date.now() - lastSuccess > 15000);
   const errors = [...panelErrors.values()];
-  byId('connection-status').textContent = stale ? 'STALE' : errors.length ? 'PARTIAL' : lastSuccess ? 'LIVE' : 'CONNECTING';
+  byId('connection-status').textContent = stale ? 'STALE' : errors.length ? 'PARTIAL' : lastSuccess ? (demoMode ? 'DEMO' : 'LIVE') : 'CONNECTING';
   const message = stale ? 'Updates are delayed. Displayed values may be out of date. ' : '';
   byId('status-banner').textContent = message + (errors.join(' ') || (lastSuccess ? 'Metrics are updating.' : 'Waiting for the first update…'));
   byId('status-banner').classList.toggle('text-amber-300', Boolean(stale || errors.length));

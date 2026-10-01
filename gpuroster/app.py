@@ -17,11 +17,16 @@ def create_app(config=None, collector=None):
     application.config.update(load_settings())
     if config:
         application.config.update(config)
-    application.extensions["collector"] = (
-        collector
-        if collector is not None
-        else CollectorService(application.config, application.config["DB_PATH"])
-    )
+    if collector is None:
+        if application.config["DEMO"]:
+            from gpuroster.monitoring.demo import create_demo_collector
+
+            collector = create_demo_collector(application.config)
+        else:
+            collector = CollectorService(
+                application.config, application.config["DB_PATH"]
+            )
+    application.extensions["collector"] = collector
     application.before_request(protect_access)
     application.after_request(protect_responses)
     application.add_url_rule("/", view_func=index)
@@ -74,6 +79,9 @@ def protect_access():
 
 
 def protect_responses(response):
+    response.headers["X-GPU-Roster-Mode"] = (
+        "demo" if current_app.config["DEMO"] else "live"
+    )
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -134,6 +142,7 @@ def api_gpu_history():
     service = collector()
     health = service.snapshot()["health"]["sources"]["history"]
     result = service.store.read(range_key, time.time(), current_app.config["TIMEZONE"])
+    result["mode"] = "demo" if current_app.config["DEMO"] else "live"
     result["health"] = health
     return jsonify(result)
 

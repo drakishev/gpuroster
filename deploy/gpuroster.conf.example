@@ -1,5 +1,6 @@
 # Non-secret settings only. systemd LoadCredential supplies the password.
 GPUROSTER_AUTH_USER=viewer
+GPUROSTER_DEMO=0
 GPUROSTER_PORT=18081
 GPUROSTER_GPU_BACKEND=auto
 GPUROSTER_COLLECT_INTERVAL=3

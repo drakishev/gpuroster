@@ -106,3 +106,5 @@ jobs:
           "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip check
       - name: Test installed launcher outside checkout without GPU tools
         run: python scripts/smoke_install.py "$RUNNER_TEMP/gpuroster-install/bin/gpuroster"
+      - name: Test installed synthetic demo without host monitoring or persistent state
+        run: python scripts/smoke_install.py "$RUNNER_TEMP/gpuroster-install/bin/gpuroster" --demo

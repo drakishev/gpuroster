@@ -1,6 +1,6 @@
 # Linux deployment
 
-Use the installed `gpuroster` command under a service manager. It runs Waitress with four request threads, one collector thread, and at most one NVML worker. A bare Flask/WSGI import does not start collection. Multiple web workers and network-filesystem history are not supported. See [ADR-004](architecture/ADR-004-production-deployment.md).
+Use the installed `gpuroster` command under a service manager. For actual monitoring, leave `GPUROSTER_DEMO` unset or `0` and omit `--demo`; demo mode deliberately does not monitor the host or persist history. It runs Waitress with four request threads, one collector thread, and at most one NVML worker. A bare Flask/WSGI import does not start collection. Multiple web workers and network-filesystem history are not supported. See [ADR-004](architecture/ADR-004-production-deployment.md).
 
 ## Install the package
 
@@ -11,7 +11,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install build==1.6.1
 .venv/bin/python -m build
 sudo python3 -m venv /opt/gpuroster/venv
-sudo /opt/gpuroster/venv/bin/python -m pip install dist/gpuroster-0.3.0-py3-none-any.whl
+sudo /opt/gpuroster/venv/bin/python -m pip install dist/gpuroster-0.4.0-py3-none-any.whl
 /opt/gpuroster/venv/bin/gpuroster --version
 ```
 
@@ -71,7 +71,7 @@ The first collector write retains the Phase 2 additive `gpu_uuid` migration and 
 
 ```bash
 python3 -m venv /tmp/gpuroster-install
-/tmp/gpuroster-install/bin/python -m pip install dist/gpuroster-0.3.0-py3-none-any.whl
+/tmp/gpuroster-install/bin/python -m pip install dist/gpuroster-0.4.0-py3-none-any.whl
 python3 scripts/smoke_install.py /tmp/gpuroster-install/bin/gpuroster
 ```
 

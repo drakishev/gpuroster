@@ -97,6 +97,7 @@ class CollectorService:
 
     def _payload(self, devices, processes, system, now):
         return {
+            "mode": "demo" if self.config.get("DEMO") else "live",
             **MetricSnapshot(
                 self._sequence, now, tuple(devices), tuple(processes), system
             ).to_dict(),

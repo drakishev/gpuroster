@@ -4,11 +4,27 @@ A lightweight dashboard for GPU utilization, memory, and process ownership on a 
 
 The application combines Flask, NVML (with a `nvidia-smi` fallback), psutil, and SQLite. One scheduled collector supplies every dashboard with the same snapshot. It shows live metrics, a rolling utilization chart, and up to 31 days of utilization history. Session estimates are optional. The supported launcher uses one Waitress process with four HTTP worker threads.
 
-![Dashboard showing four synthetic GPUs and example users](docs/images/shared-collector-dashboard.png)
+![GPU Roster demo showing synthetic GPUs, users, and history](docs/images/demo-dashboard.png)
 
-The screenshot uses synthetic data. It does not depict a real server or an available demo mode.
+The screenshot comes from the built-in demo; it contains no real host or user data.
 
-## Run locally
+## Try without a GPU
+
+Use Linux and Python 3.10 or newer:
+
+```bash
+git clone https://github.com/drakishev/gpuroster.git
+cd gpuroster
+python3 -m venv venv
+venv/bin/python -m pip install .
+venv/bin/gpuroster --demo
+```
+
+Open **http://127.0.0.1:18081**. Demo mode shows four generated GPUs, example processes/users, synthetic system metrics, and populated live/today/week/month charts. It reads no GPU tools, host processes, or login records, and never opens or writes `GPUROSTER_DB_PATH`. History is generated in memory and disappears on exit. A persistent banner and API mode markers identify the data as synthetic.
+
+`GPUROSTER_DEMO=1` also enables demo mode. Optional session panels use generated examples when `GPUROSTER_SHOW_SESSIONS=1`. Normal authentication, loopback restrictions, and privacy defaults still apply. After dependency installation, the dashboard works without internet access. See the [demo and asset decision](docs/architecture/ADR-005-offline-assets-and-demo.md).
+
+## Monitor a real host
 
 Use Python 3.10 or newer on Linux, an NVIDIA driver providing NVML (`libnvidia-ml`), and permission to inspect the relevant processes. `nvidia-smi` is needed for the CLI fallback. Optional session history needs util-linux `last` with ISO timestamp support and readable login records.
 
@@ -54,6 +70,7 @@ Process owners, PIDs, and executable names remain available to authorized viewer
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
+| `GPUROSTER_DEMO` | `0` | Use synthetic sources and in-memory history; `--demo` also enables this mode |
 | `GPUROSTER_HOST` | `127.0.0.1` | Listening address |
 | `GPUROSTER_PORT` | `18081` | Listening port |
 | `GPUROSTER_AUTH_USER` | unset | Basic-auth username; requires password |
@@ -95,7 +112,7 @@ Backend tests alone need only the runtime dependencies:
 venv/bin/python -m unittest discover -s tests -v
 ```
 
-[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, builds a wheel from the source distribution, tests a clean installation outside the checkout, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 3 validation](docs/validation/phase-three.md), and [contribution guidelines](CONTRIBUTING.md).
+[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, builds a wheel from the source distribution, tests a clean installation outside the checkout, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 4 validation](docs/validation/phase-four.md), and [contribution guidelines](CONTRIBUTING.md).
 
 ## Architecture
 
@@ -143,4 +160,4 @@ Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-drive
 
 Connected-time estimates now handle overlap and window boundaries, but login logs may be rotated, truncated, incomplete, or inaccessible. SSH process visibility depends on OS permissions. These estimates are not billing records or GPU usage time.
 
-Frontend assets are served locally under a restrictive content policy; Node is needed only to rebuild them. See the [asset workflow](frontend/README.md). Runtime dependencies are not fully locked, and demo mode is not implemented yet.
+Frontend assets are served locally under a restrictive content policy; Node is needed only to rebuild them. See the [asset workflow](frontend/README.md). Runtime dependencies are not fully locked. Demo data is illustrative; it cannot validate driver support or target-host permissions.

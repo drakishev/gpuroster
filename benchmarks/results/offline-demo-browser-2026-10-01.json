@@ -1,0 +1,28 @@
+{
+  "mode": "synthetic_demo",
+  "loads_with_fresh_context": 5,
+  "ready_median_ms": 106.775,
+  "ready_max_ms": 360.031,
+  "updates": 1000,
+  "update_median_ms": 10.834,
+  "update_p95_ms": 16.343,
+  "retained_js_heap_before_bytes": 2947704,
+  "retained_js_heap_after_100_bytes": 3711432,
+  "retained_js_heap_after_bytes": 4269580,
+  "external_requests": 0,
+  "browser_errors": 0,
+  "assets": [
+    {
+      "path": "/static/dashboard.css",
+      "bytes": 10943
+    },
+    {
+      "path": "/static/dashboard.js",
+      "bytes": 17704
+    },
+    {
+      "path": "/static/vendor/chart.umd.js",
+      "bytes": 205325
+    }
+  ]
+}

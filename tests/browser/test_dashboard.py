@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright
 from werkzeug.serving import make_server
 
 import gpuroster.app as app
+from gpuroster.server import HTTPServer
 from gpuroster.settings import load_settings
 
 
@@ -338,6 +339,78 @@ class BrowserTests(unittest.TestCase):
             "const script = document.createElement('script'); script.textContent = 'window.inlineExecution=true'; document.head.append(script)"
         )
         self.assertIsNone(self.page.evaluate("window.inlineExecution"))
+
+    def test_real_demo_api_and_assets_work_together_without_external_network(self):
+        demo = app.create_app(
+            {**load_settings({}), "DEMO": True, "SHOW_SESSIONS": True}
+        )
+        service = demo.extensions["collector"]
+        service.start()
+        server = HTTPServer(demo, "127.0.0.1", 0)
+        stop = threading.Event()
+        thread = threading.Thread(target=server.run, args=(stop,), daemon=True)
+        thread.start()
+        original_url = self.url
+        self.url = f"http://127.0.0.1:{server.server.effective_port}"
+        self.page.unroute_all()
+        external = []
+
+        def local_only(route):
+            if not route.request.url.startswith(self.url + "/"):
+                external.append(route.request.url)
+                route.abort()
+            else:
+                route.continue_()
+
+        self.page.route("**/*", local_only)
+        self.page.add_init_script(
+            "window.cspViolations=[]; document.addEventListener('securitypolicyviolation', e => cspViolations.push(e.violatedDirective));"
+        )
+        try:
+            self.load()
+            self.assertIn(
+                "Synthetic demo", self.page.locator("#demo-banner").inner_text()
+            )
+            self.assertEqual(
+                self.page.locator("#connection-status").inner_text(), "DEMO"
+            )
+            self.assertEqual(self.page.locator(".gpu-card").count(), 4)
+            self.assertIn(
+                "demo-alex", self.page.locator("#user-gpu-tbody").inner_text()
+            )
+            self.wait_for(
+                "document.getElementById('session-tbody').textContent.includes('demo-alex')"
+            )
+            self.page.locator('[data-util-range="month"]').click()
+            self.wait_for(
+                "Chart.getChart('util-chart').data.labels.length > 100 && document.getElementById('util-chart-title').textContent.includes('Last 30 days')"
+            )
+            self.assertEqual(
+                self.page.evaluate("Chart.getChart('util-chart').data.datasets.length"),
+                4,
+            )
+            self.page.set_viewport_size({"width": 390, "height": 844})
+            self.wait_for("document.documentElement.scrollWidth <= window.innerWidth")
+            self.assertFalse(external)
+            self.assertEqual(self.page.evaluate("cspViolations"), [])
+            self.assertFalse(self.errors)
+        finally:
+            self.page.goto("about:blank")
+            self.url = original_url
+            stop.set()
+            thread.join(3)
+            server.close()
+            service.stop()
+
+    def test_demo_label_survives_request_failure(self):
+        with patch.dict(application.config, {"DEMO": True}):
+            self.load()
+        self.status = 503
+        self.page.evaluate("fetchStats()")
+        self.assertIn("Synthetic demo", self.page.locator("#demo-banner").inner_text())
+        self.assertEqual(
+            self.page.locator("#connection-status").inner_text(), "PARTIAL"
+        )
 
     def test_charts_keep_midnight_order_and_update_gpu_identity(self):
         self.load()
