@@ -236,6 +236,7 @@ class BrowserTests(unittest.TestCase):
         self.assertIn("UNKNOWN", text)
         self.assertIn("Unavailable", text)
         self.assertNotIn("NaN", text)
+        self.assertEqual(self.page.locator("#sys-active-gpus").inner_text(), "— / 1")
         self.assertFalse(self.errors)
 
     def test_request_failure_and_recovery_update_status(self):

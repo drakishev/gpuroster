@@ -280,7 +280,9 @@ async function fetchStats() {
     }
     byId('sys-cpu').textContent = data.system && finite(data.system.cpu_percent) ? data.system.cpu_percent + '%' : '—';
     byId('sys-ram').textContent = data.system ? data.system.ram_used_gb + ' / ' + data.system.ram_total_gb + ' GB' : '—';
-    byId('sys-active-gpus').textContent = sources.gpus.status === 'ok' ? data.gpus.filter(gpu => finite(gpu.utilization) && gpu.utilization > 5).length + ' / ' + data.gpus.length : '—';
+    const utilizationComplete = data.gpus.every(gpu => finite(gpu.utilization));
+    const activeCount = utilizationComplete ? data.gpus.filter(gpu => gpu.utilization > 5).length : '—';
+    byId('sys-active-gpus').textContent = sources.gpus.status === 'ok' ? activeCount + ' / ' + data.gpus.length : '—';
     byId('sys-procs').textContent = sources.processes.status === 'ok' ? data.processes.length : '—';
     if (sessionsEnabled) {
       if (sources.connections.status === 'ok') renderConnections(data.connections);
