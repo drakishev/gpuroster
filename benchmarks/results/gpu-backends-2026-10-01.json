@@ -1,0 +1,80 @@
+[
+  {
+    "backend": "smi",
+    "gpus": 1,
+    "samples": 30,
+    "initialization_ms": 0,
+    "median_ms": 281.86,
+    "p95_ms": 456.509,
+    "cpu_ms_per_sample_including_children": 147.324,
+    "parent_peak_rss_kib": 15052,
+    "child_peak_rss_kib": 22480,
+    "subprocesses_per_sample": 2,
+    "unsupported_metric_observations": 0
+  },
+  {
+    "backend": "nvml",
+    "gpus": 1,
+    "samples": 30,
+    "initialization_ms": 92.303,
+    "median_ms": 0.086,
+    "p95_ms": 0.097,
+    "cpu_ms_per_sample_including_children": 0.089,
+    "parent_peak_rss_kib": 37192,
+    "child_peak_rss_kib": 0,
+    "subprocesses_per_sample": 0,
+    "unsupported_metric_observations": 0
+  },
+  {
+    "backend": "smi",
+    "gpus": 4,
+    "samples": 30,
+    "initialization_ms": 0,
+    "median_ms": 284.603,
+    "p95_ms": 336.512,
+    "cpu_ms_per_sample_including_children": 152.144,
+    "parent_peak_rss_kib": 15004,
+    "child_peak_rss_kib": 23128,
+    "subprocesses_per_sample": 2,
+    "unsupported_metric_observations": 0
+  },
+  {
+    "backend": "nvml",
+    "gpus": 4,
+    "samples": 30,
+    "initialization_ms": 114.17,
+    "median_ms": 0.2,
+    "p95_ms": 0.216,
+    "cpu_ms_per_sample_including_children": 0.205,
+    "parent_peak_rss_kib": 37412,
+    "child_peak_rss_kib": 0,
+    "subprocesses_per_sample": 0,
+    "unsupported_metric_observations": 0
+  },
+  {
+    "backend": "smi",
+    "gpus": 8,
+    "samples": 30,
+    "initialization_ms": 0,
+    "median_ms": 281.141,
+    "p95_ms": 342.68,
+    "cpu_ms_per_sample_including_children": 160.786,
+    "parent_peak_rss_kib": 15072,
+    "child_peak_rss_kib": 23128,
+    "subprocesses_per_sample": 2,
+    "unsupported_metric_observations": 0
+  },
+  {
+    "backend": "nvml",
+    "gpus": 8,
+    "samples": 30,
+    "initialization_ms": 118.96,
+    "median_ms": 0.583,
+    "p95_ms": 0.599,
+    "cpu_ms_per_sample_including_children": 0.587,
+    "parent_peak_rss_kib": 37432,
+    "child_peak_rss_kib": 0,
+    "subprocesses_per_sample": 0,
+    "unsupported_metric_observations": 0
+  }
+]

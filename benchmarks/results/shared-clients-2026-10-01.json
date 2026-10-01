@@ -1,0 +1,50 @@
+[
+  {
+    "clients": 1,
+    "duration_s": 3.001,
+    "api_requests": 15,
+    "failures": 0,
+    "hardware_cycles": 12,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 0.083,
+    "peak_rss_kib": 41068,
+    "median_ms": 4.015,
+    "p95_ms": 7.7
+  },
+  {
+    "clients": 5,
+    "duration_s": 3.002,
+    "api_requests": 75,
+    "failures": 0,
+    "hardware_cycles": 12,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 0.311,
+    "peak_rss_kib": 43408,
+    "median_ms": 3.826,
+    "p95_ms": 16.216
+  },
+  {
+    "clients": 20,
+    "duration_s": 3.009,
+    "api_requests": 300,
+    "failures": 0,
+    "hardware_cycles": 12,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 1.222,
+    "peak_rss_kib": 49608,
+    "median_ms": 7.119,
+    "p95_ms": 30.819
+  },
+  {
+    "clients": 50,
+    "duration_s": 3.22,
+    "api_requests": 732,
+    "failures": 0,
+    "hardware_cycles": 12,
+    "cycle_interval_s": 0.25,
+    "cpu_seconds": 3.108,
+    "peak_rss_kib": 62716,
+    "median_ms": 127.849,
+    "p95_ms": 228.854
+  }
+]

@@ -2,6 +2,7 @@
 
 import math
 import os
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def load_settings(environ=None):
@@ -25,6 +26,22 @@ def load_settings(environ=None):
     port = int(env.get("GPUROSTER_PORT", "18081"))
     if not 1 <= port <= 65535:
         raise ValueError("GPUROSTER_PORT must be between 1 and 65535")
+    interval = float(env.get("GPUROSTER_COLLECT_INTERVAL", "3"))
+    session_interval = float(env.get("GPUROSTER_SESSION_INTERVAL", "60"))
+    if not math.isfinite(interval) or not 0.1 <= interval <= 60:
+        raise ValueError("GPUROSTER_COLLECT_INTERVAL must be between 0.1 and 60")
+    if not math.isfinite(session_interval) or not 1 <= session_interval <= 3600:
+        raise ValueError("GPUROSTER_SESSION_INTERVAL must be between 1 and 3600")
+    backend = env.get("GPUROSTER_GPU_BACKEND", "auto")
+    if backend not in {"auto", "smi", "nvml"}:
+        raise ValueError("GPUROSTER_GPU_BACKEND must be auto, smi, or nvml")
+    timezone_name = env.get("GPUROSTER_TIMEZONE", "UTC")
+    try:
+        ZoneInfo(timezone_name)
+    except (ValueError, ZoneInfoNotFoundError):
+        raise ValueError(
+            "GPUROSTER_TIMEZONE must name an installed IANA timezone"
+        ) from None
     return {
         "BIND_HOST": env.get("GPUROSTER_HOST", "127.0.0.1"),
         "BIND_PORT": port,
@@ -33,4 +50,11 @@ def load_settings(environ=None):
         "SHOW_COMMANDS": flag("GPUROSTER_SHOW_COMMANDS"),
         "SHOW_SESSIONS": flag("GPUROSTER_SHOW_SESSIONS"),
         "COMMAND_TIMEOUT": timeout,
+        "COLLECT_INTERVAL": interval,
+        "SESSION_INTERVAL": session_interval,
+        "GPU_BACKEND": backend,
+        "TIMEZONE": timezone_name,
+        "DB_PATH": env.get(
+            "GPUROSTER_DB_PATH", os.path.join(os.path.dirname(__file__), "gpu_stats.db")
+        ),
     }

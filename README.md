@@ -2,15 +2,15 @@
 
 A lightweight dashboard for GPU utilization, memory, and process ownership on a shared NVIDIA host.
 
-The current application combines Flask, `nvidia-smi`, psutil, and SQLite. It shows live metrics, a rolling utilization chart, and up to 31 days of utilization history. Session estimates are optional. This is an early development version; production deployment and collection architecture are still being improved.
+The application combines Flask, NVML (with a `nvidia-smi` fallback), psutil, and SQLite. One scheduled collector supplies every dashboard with the same snapshot. It shows live metrics, a rolling utilization chart, and up to 31 days of utilization history. Session estimates are optional. Production deployment is still being improved.
 
-![Dashboard showing four synthetic GPUs and example users](docs/images/phase-one-dashboard.png)
+![Dashboard showing four synthetic GPUs and example users](docs/images/shared-collector-dashboard.png)
 
 The screenshot uses synthetic data. It does not depict a real server or an available demo mode.
 
 ## Run locally
 
-Use Python 3.10 or newer on Linux, an NVIDIA driver providing `nvidia-smi`, and permission to inspect the relevant processes. Optional session history needs the `last` utility and readable login records.
+Use Python 3.10 or newer on Linux, an NVIDIA driver providing NVML (`libnvidia-ml`), and permission to inspect the relevant processes. `nvidia-smi` is needed for the CLI fallback. Optional session history needs util-linux `last` with ISO timestamp support and readable login records.
 
 ```bash
 git clone https://github.com/drakishev/gpuroster.git
@@ -54,7 +54,11 @@ Process owners, PIDs, and executable names remain available to authorized viewer
 | `GPUROSTER_AUTH_PASSWORD` | unset | Basic-auth password; requires username |
 | `GPUROSTER_SHOW_COMMANDS` | `0` | Include truncated command arguments |
 | `GPUROSTER_SHOW_SESSIONS` | `0` | Enable SSH connections and login/session APIs and panels |
-| `GPUROSTER_COMMAND_TIMEOUT` | `3` | Timeout in seconds for each external command; greater than 0, at most 30 |
+| `GPUROSTER_COMMAND_TIMEOUT` | `3` | Timeout in seconds for each command or NVML worker response; greater than 0, at most 30 |
+| `GPUROSTER_GPU_BACKEND` | `auto` | Prefer the NVML worker; fall back to CLI if initialization is unavailable. Explicit choices: `nvml`, `smi` |
+| `GPUROSTER_COLLECT_INTERVAL` | `3` | Shared collection interval in seconds, 0.1–60; clients do not change it |
+| `GPUROSTER_SESSION_INTERVAL` | `60` | Optional session/SSH evidence refresh in seconds, 1–3600 |
+| `GPUROSTER_TIMEZONE` | `UTC` | IANA timezone defining “today”; API timestamps and chart labels remain UTC |
 | `GPUROSTER_DB_PATH` | `gpu_stats.db` beside `app.py` | SQLite history file; parent directory must exist |
 
 Boolean options accept `0`, `1`, `false`, or `true`. Environment variables are read at startup; `.env` files are not loaded automatically. Keep databases and credentials outside Git.
@@ -67,6 +71,7 @@ Ordinary tests need no GPU, login records, credentials, or production database. 
 venv/bin/python -m pip install -r requirements-dev.txt
 venv/bin/python -m playwright install --with-deps chromium
 venv/bin/python -m unittest discover -s tests -v
+venv/bin/python -m unittest discover -s tests/browser -v
 venv/bin/ruff check .
 venv/bin/ruff format --check .
 node --check static/dashboard.js
@@ -76,10 +81,29 @@ bash -n start.sh
 Backend tests alone need only the runtime dependencies:
 
 ```bash
-venv/bin/python -m unittest discover -s tests -p 'test_backend.py' -v
+venv/bin/python -m unittest discover -s tests -v
 ```
 
-[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, and audits runtime dependencies. See [validation evidence](docs/validation/phase-one.md) and [contribution guidelines](CONTRIBUTING.md).
+[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 2 validation](docs/validation/phase-two.md), and [contribution guidelines](CONTRIBUTING.md).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    NVML["NVML worker / CLI"] --> Collector["One scheduled collector"]
+    System["System / processes / optional sessions"] --> Collector
+    Collector --> Cache["Atomic snapshot + source health"]
+    Collector --> History["Rolling history + SQLite writer"]
+    Cache --> API["Flask API"]
+    History --> API
+    API --> Clients["Many browser clients"]
+```
+
+The collector runs in one thread in the web process. NVML calls run in one persistent child process so a stalled driver call can time out and the worker can be restarted. CLI collection remains available. API requests copy published snapshots; they never poll hardware. Historical API requests query SQLite directly.
+
+Collection attempts use a monotonic schedule and skip missed intervals rather than accumulating work. Snapshots carry a sequence number, UTC collection timestamp, backend name, and source ages. An HTTP response does not make an old measurement fresh. The first CPU interval is unknown until the collector has a baseline.
+
+Code responsibilities: `app.py` serves HTTP and enforces access; `monitoring/models.py` defines measurements; `collectors.py` and `nvml.py` read sources; `service.py` owns scheduling/cache/lifecycle; `sessions.py` accounts for intervals; `history.py` owns rolling data and SQLite. See [ADR-002](docs/architecture/ADR-002-shared-collection.md) and [ADR-003](docs/architecture/ADR-003-time-identity-and-accounting.md).
 
 ## Changes from the baseline
 
@@ -88,14 +112,24 @@ venv/bin/python -m unittest discover -s tests -p 'test_backend.py' -v
 - Unsupported GPU metrics are `null`, with collection failures described in `health.sources`. The dashboard distinguishes partial, stale, and unavailable values.
 - Non-interactive SSH is labeled as such; it no longer implies VS Code. API fields changed from `has_vscode` to `has_noninteractive_ssh`, and the synthetic session source is now `noninteractive_ssh`.
 - Importing `app` no longer initializes SQLite or starts a thread. Use `bash start.sh` or `venv/bin/python app.py`; `flask run` and a bare WSGI import do not start history collection.
-- The database schema is unchanged. Existing history files remain readable.
+- Phase 1 preserved the database schema. Phase 2 adds a nullable `gpu_uuid` column on the collector's first write. Existing records remain labeled as legacy index history; they are not assigned to a current GPU. The application database has not been migrated merely by checking out or importing this code.
+
+## Phase 2 API and database migration
+
+Install the updated requirements before restarting. Stop the old instance and back up its SQLite file before launching the new collector. Use one web process; do not run multiple instances against the same database. The migration adds a column and preserves rows within the existing 31-day retention policy. Ordinary writes still remove expired rows. Old explicit-column inserts remain compatible, but rolling back cannot restore UUID-based history semantics.
+
+`/api/stats` now returns `schema_version: 2`, `sequence`, and the actual collection timestamp. GPU records include `uuid`; processes include `gpu_uuid`, and an unmapped index is `null`. Live `history` is keyed by UUID with numeric Unix-second timestamps; `history_devices` supplies display indices. Historical datasets have stable `id` values, UTC ISO labels, and explicit gaps. GPU/process memory fields retain their old API names but mean MiB/GiB; system RAM also exposes exact byte counts. See the [snapshot contract](docs/architecture/snapshot-v2.md).
+
+Before the first snapshot, `/api/stats` returns `503 collector_not_ready`. Starting the collector is explicit: importing a WSGI app alone will not start it. Session endpoints use cached evidence and return 503 when required sources are unavailable or stale. Truncated or malformed records are marked partial in source health.
+
+Connected time is the union of a user's session intervals, clipped to each window. Simultaneous terminals count once. “Today” uses the configured timezone (including DST); week/month mean the preceding 7/30 elapsed days. Non-interactive SSH contributes only currently visible evidence and is not persisted as an authoritative session ledger.
 
 ## Current limits and next work
 
-The launcher uses Flask's development server in a single process. [Flask's deployment guidance](https://flask.palletsprojects.com/en/stable/deploying/) explains why it is unsuitable for production serving. There is no supported multi-worker collector deployment yet.
+The launcher uses Flask's development server with one web process and a child NVML worker. [Flask's deployment guidance](https://flask.palletsprojects.com/en/stable/deploying/) explains why the development server is unsuitable for production serving. The cache is process-local: there is no supported multi-worker web deployment yet.
 
-Live API requests still poll hardware per client. A shared collector/cache, measured NVML comparison, and multi-client benchmarks are next architecture work. The first nonblocking CPU sample can be inaccurate. History still uses GPU indices and local-time labels; stable device identity, UTC time handling, and retention/query benchmarks remain planned work.
+Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-driver or MIG compatibility certification. Slow OS process inspection can still delay a collection cycle, while clients continue to receive cached data with age/status. History aggregation currently runs per request. Larger retention, downsampling, and an independent collector service remain future architecture work.
 
-Login durations are estimates with known overlap and time-window accounting issues; do not use them for billing or usage quotas. SSH process visibility also depends on OS permissions.
+Connected-time estimates now handle overlap and window boundaries, but login logs may be rotated, truncated, incomplete, or inaccessible. SSH process visibility depends on OS permissions. These estimates are not billing records or GPU usage time.
 
 Tailwind and Chart.js still load from external CDNs. Charts report load failures, but offline asset delivery and stronger script CSP remain future work. Runtime dependencies are not fully locked, and installable packaging and demo mode are not implemented yet.
