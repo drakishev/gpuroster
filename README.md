@@ -32,7 +32,7 @@ Replace the example SSH destination with your own. Open the same local URL after
 
 ## Installed command
 
-After `pip install .`, activate the environment and run `gpuroster` from any directory. `gpuroster --version` reports the installed version. Templates and dashboard JavaScript are included in the wheel; chart and style CDN assets still need internet access. GPU Roster is supported on Linux with Python 3.10 or newer.
+After `pip install .`, activate the environment and run `gpuroster` from any directory. `gpuroster --version` reports the installed version. Templates, CSS, Chart.js, and dashboard JavaScript are included in the wheel; the dashboard needs no external network access. GPU Roster is supported on Linux with Python 3.10 or newer.
 
 See the [deployment guide](docs/deployment.md) for systemd, password files, persistent state, SSH/TLS access, and migration/rollback. The [production-serving decision](docs/architecture/ADR-004-production-deployment.md) records alternatives and measured results.
 
@@ -76,7 +76,7 @@ When neither password option is set, the launcher also reads `dashboard-password
 
 ## Development and checks
 
-Ordinary tests need no GPU, login records, credentials, or production database. Browser tests intercept metrics and CDN requests with synthetic fixtures.
+Ordinary tests need no GPU, login records, credentials, or production database. Browser tests use synthetic metrics and also exercise the real packaged assets with external requests blocked.
 
 ```bash
 venv/bin/python -m pip install -r requirements-dev.txt
@@ -143,4 +143,4 @@ Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-drive
 
 Connected-time estimates now handle overlap and window boundaries, but login logs may be rotated, truncated, incomplete, or inaccessible. SSH process visibility depends on OS permissions. These estimates are not billing records or GPU usage time.
 
-Tailwind and Chart.js still load from external CDNs. Charts report load failures, but offline asset delivery and stronger script CSP remain future work. Runtime dependencies are not fully locked, and demo mode is not implemented yet.
+Frontend assets are served locally under a restrictive content policy; Node is needed only to rebuild them. See the [asset workflow](frontend/README.md). Runtime dependencies are not fully locked, and demo mode is not implemented yet.

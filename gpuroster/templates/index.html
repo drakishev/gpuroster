@@ -4,45 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GPU Monitor</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <style>
-    body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
-    .card { background: #1a1d2e; border: 1px solid #2d3155; border-radius: 12px; }
-    .gpu-card { transition: transform 0.15s, box-shadow 0.15s; }
-    .gpu-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(99,102,241,0.18); }
-    .bar-bg { background: #2d3155; border-radius: 99px; height: 8px; overflow: hidden; }
-    .bar-fill { border-radius: 99px; height: 8px; transition: width 0.6s ease; }
-    .util-low  { background: linear-gradient(90deg, #10b981, #34d399); }
-    .util-mid  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-    .util-high { background: linear-gradient(90deg, #ef4444, #f97316); }
-    .mem-fill  { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
-    .badge     { border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
-    .badge-active { background: #065f46; color: #34d399; }
-    .badge-idle   { background: #1e1b4b; color: #818cf8; }
-    .badge-hot    { background: #7f1d1d; color: #fca5a5; }
-    .badge-live   { background: #14532d; color: #4ade80; }
-    .pill { border-radius: 99px; padding: 1px 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; }
-    .pill-user { background: #312e81; color: #a5b4fc; cursor: pointer; }
-    .pill-user:hover { background: #4338ca; }
-    .pill-user.active-filter { background: #4f46e5; outline: 2px solid #818cf8; }
-    .section-title { font-size: 0.7rem; letter-spacing: 0.12em; font-weight: 700; color: #6366f1; text-transform: uppercase; margin-bottom: 12px; }
-    table { border-collapse: separate; border-spacing: 0; }
-    th { font-size: 0.68rem; letter-spacing: 0.08em; font-weight: 700; color: #6366f1; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid #2d3155; }
-    td { padding: 8px 12px; font-size: 0.81rem; border-bottom: 1px solid #1e2138; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #1e2138; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .dot-green { background: #10b981; box-shadow: 0 0 6px #10b981; }
-    .dot-gray  { background: #4b5563; }
-    .pulse { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-    .stat-number { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
-    .chart-wrap { position: relative; height: 220px; }
-    .session-row-live td { background: rgba(16,185,129,0.05); }
-    .session-row-live:hover td { background: rgba(16,185,129,0.1) !important; }
-    .hidden-row { display: none; }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
+  <script src="{{ url_for('static', filename='vendor/chart.umd.js') }}" defer></script>
 </head>
 <body class="min-h-screen p-4 lg:p-6" data-sessions-enabled="{{ 'true' if config['SHOW_SESSIONS'] else 'false' }}" data-request-timeout-ms="{{ (config['COMMAND_TIMEOUT'] * 3000 + 5000)|int }}">
 
@@ -72,7 +35,7 @@
 <!-- Active Connections -->
 <div class="card p-5 mb-6">
   <div class="flex items-center gap-3 mb-3">
-    <div class="section-title" style="margin-bottom:0">Active Connections</div>
+    <div class="section-title section-heading">Active Connections</div>
     <span class="text-xs text-slate-500">Verified SSH connections</span>
   </div>
   <div class="overflow-x-auto">
@@ -102,7 +65,7 @@
 <!-- GPU Utilization History Chart -->
 <div class="card p-5 mb-6">
   <div class="flex items-center justify-between mb-4">
-    <div class="section-title" style="margin-bottom:0" id="util-chart-title">GPU Utilization</div>
+    <div class="section-title section-heading" id="util-chart-title">GPU Utilization</div>
     <div class="flex gap-2">
       <button data-util-range="live"  id="btn-util-live"
         class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 bg-indigo-900 text-indigo-200">Live</button>
@@ -164,7 +127,7 @@
 <!-- Login / Usage Stats -->
 <div class="card p-5 mb-6">
   <div class="flex items-center justify-between mb-4">
-    <div class="section-title" style="margin-bottom:0">Estimated Connected Time per User · {{ config['TIMEZONE'] }}</div>
+    <div class="section-title section-heading">Estimated Connected Time per User · {{ config['TIMEZONE'] }}</div>
     <div class="flex gap-2">
       <button data-login-period="today" id="btn-today"
         class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 text-indigo-400 hover:bg-indigo-900 transition-colors">Today</button>
@@ -188,7 +151,7 @@
 <!-- Session History Table -->
 <div class="card p-5 mb-6">
   <div class="flex flex-wrap items-center gap-3 mb-4">
-    <div class="section-title" style="margin-bottom:0">Session History</div>
+    <div class="section-title section-heading">Session History</div>
     <div class="flex flex-wrap gap-2 ml-2" id="session-filter-pills">
       <span class="pill pill-user active-filter" data-user="all" >All</span>
     </div>

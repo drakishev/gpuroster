@@ -79,7 +79,9 @@ def protect_responses(response):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Content-Security-Policy"] = (
-        "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+        "default-src 'none'; script-src 'self'; style-src 'self'; "
+        "connect-src 'self'; img-src 'self'; font-src 'self'; "
+        "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     )
     return response
 

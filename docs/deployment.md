@@ -51,7 +51,7 @@ curl --fail --user viewer http://127.0.0.1:18081/api/stats
 
 Snapshot output contains host metrics and process owners: inspect it locally and do not paste it into public issues. HTTP 503 `collector_not_ready` is expected before the first publication. Afterwards, HTTP 200 means a snapshot is available, not that all sources are healthy. Check `health.sources`, ages, and sequence advancement. A host without NVIDIA support should serve the page with visibly unavailable GPU metrics.
 
-`journalctl -u gpuroster` contains startup/shutdown and safe collection error codes. The launcher does not log credentials, raw command errors, or an access log. Third-party server errors may include request-related details; keep service logs private. Tailwind and Chart.js still require CDN access; offline assets are the next frontend task.
+`journalctl -u gpuroster` contains startup/shutdown and safe collection error codes. The launcher does not log credentials, raw command errors, or an access log. Third-party server errors may include request-related details; keep service logs private. Styles and Chart.js are packaged and served by the application; browsers need no CDN access.
 
 ## Ownership and shutdown
 

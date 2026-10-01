@@ -21,7 +21,7 @@ packages = ["gpuroster", "gpuroster.monitoring"]
 include-package-data = false
 
 [tool.setuptools.package-data]
-gpuroster = ["templates/*.html", "static/*.js"]
+gpuroster = ["templates/*.html", "static/*.js", "static/*.css", "static/vendor/*.js", "static/vendor/*.txt"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

@@ -93,7 +93,14 @@ def main():
                 assert snapshot["schema_version"] == 2 and snapshot["sequence"] > 0
                 assert snapshot["gpus"] == []
                 assert snapshot["health"]["sources"]["gpus"]["status"] == "unavailable"
-                for route in ("/", "/static/dashboard.js", "/api/gpu_history"):
+                for route in (
+                    "/",
+                    "/static/dashboard.js",
+                    "/static/dashboard.css",
+                    "/static/vendor/chart.umd.js",
+                    "/static/vendor/chartjs.LICENSE.txt",
+                    "/api/gpu_history",
+                ):
                     assert request(url + route)[0] == 401
                     assert request(url + route, password)[0] == 200
                 assert request(url + "/api/sessions", password)[0] == 403

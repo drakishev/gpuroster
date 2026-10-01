@@ -2,6 +2,7 @@
 
 import copy
 import threading
+import time
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -128,15 +129,7 @@ class BrowserTests(unittest.TestCase):
         self.hold_stats = False
         self.stats_routes = []
         self.page.route(
-            "https://cdn.tailwindcss.com/**",
-            lambda route: route.fulfill(content_type="application/javascript", body=""),
-        )
-        self.page.route(
-            "https://cdn.tailwindcss.com/",
-            lambda route: route.fulfill(content_type="application/javascript", body=""),
-        )
-        self.page.route(
-            "https://cdn.jsdelivr.net/**",
+            "**/static/vendor/chart.umd.js",
             lambda route: route.fulfill(
                 content_type="application/javascript",
                 body="window.testCharts=[]; window.Chart=class { static defaults={}; constructor(context,config){this.data=config.data;window.testCharts.push(this)} update(){} };",
@@ -173,11 +166,18 @@ class BrowserTests(unittest.TestCase):
             )
         route.fulfill(status=404, json={"error": "unexpected_test_endpoint"})
 
+    def wait_for(self, expression):
+        # Poll through the test driver; browser-side string eval is blocked by CSP.
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if self.page.evaluate(expression):
+                return
+            self.page.wait_for_timeout(25)
+        self.fail("Browser state did not become ready: " + expression)
+
     def load(self):
         self.page.goto(self.url)
-        self.page.wait_for_function(
-            "document.getElementById('last-update').textContent !== '–'"
-        )
+        self.wait_for("document.getElementById('last-update').textContent !== '–'")
 
     def test_host_strings_render_as_text_and_filters_remain_functional(self):
         payload = '"><img src=x onerror=window.injected=true><svg onload=window.injected=true>'
@@ -287,8 +287,8 @@ class BrowserTests(unittest.TestCase):
         )
 
     def test_missing_chart_dependency_does_not_stop_metric_tables(self):
-        self.page.unroute("https://cdn.jsdelivr.net/**")
-        self.page.route("https://cdn.jsdelivr.net/**", lambda route: route.abort())
+        self.page.unroute("**/static/vendor/chart.umd.js")
+        self.page.route("**/static/vendor/chart.umd.js", lambda route: route.abort())
         self.load()
         self.assertIn("example-user", self.page.locator("#user-gpu-tbody").inner_text())
         self.assertIn(
@@ -296,13 +296,56 @@ class BrowserTests(unittest.TestCase):
         )
         self.assertFalse(self.errors)
 
+    def test_real_packaged_assets_render_without_external_requests_or_csp_errors(self):
+        self.page.unroute("**/static/vendor/chart.umd.js")
+        external = []
+
+        def local_only(route):
+            if not route.request.url.startswith(self.url + "/"):
+                external.append(route.request.url)
+                route.abort()
+            else:
+                route.fallback()
+
+        self.page.route("**/*", local_only)
+        self.page.add_init_script(
+            "window.cspViolations=[]; document.addEventListener('securitypolicyviolation', e => cspViolations.push(e.violatedDirective));"
+        )
+        self.load()
+        self.wait_for("Chart.getChart('util-chart').data.datasets.length > 0")
+        self.assertEqual(
+            self.page.evaluate(
+                "getComputedStyle(document.getElementById('gpu-grid')).display"
+            ),
+            "grid",
+        )
+        self.assertGreater(
+            self.page.locator(".bar-fill").first.bounding_box()["width"], 0
+        )
+        self.assertEqual(
+            self.page.evaluate("document.getElementById('util-chart').clientHeight"),
+            220,
+        )
+        self.page.locator('[data-util-range="week"]').click()
+        self.wait_for("Chart.getChart('util-chart').data.datasets[0].label === 'GPU 3'")
+        self.assertEqual(self.page.evaluate("cspViolations"), [])
+        self.assertFalse(external)
+        self.assertFalse(self.errors)
+
+    def test_csp_blocks_inline_scripts(self):
+        self.load()
+        self.page.evaluate(
+            "const script = document.createElement('script'); script.textContent = 'window.inlineExecution=true'; document.head.append(script)"
+        )
+        self.assertIsNone(self.page.evaluate("window.inlineExecution"))
+
     def test_charts_keep_midnight_order_and_update_gpu_identity(self):
         self.load()
         self.assertEqual(
             self.page.evaluate("testCharts[0].data.labels"), ["23:59:59", "00:00:02"]
         )
         self.page.locator('[data-util-range="week"]').click()
-        self.page.wait_for_function("testCharts[0].data.datasets[0].label === 'GPU 3'")
+        self.wait_for("testCharts[0].data.datasets[0].label === 'GPU 3'")
         self.assertFalse(self.errors)
 
     def test_late_history_response_cannot_replace_live_selection(self):
@@ -345,7 +388,7 @@ class BrowserTests(unittest.TestCase):
         self.page.wait_for_timeout(100)
         self.assertEqual(self.requests.count("/api/stats"), count)
         self.page.clock.fast_forward(10000)
-        self.page.wait_for_function("panelErrors.has('statsRequest')")
+        self.wait_for("panelErrors.has('statsRequest')")
         self.assertIn(
             "could not be refreshed", self.page.locator("#status-banner").inner_text()
         )
