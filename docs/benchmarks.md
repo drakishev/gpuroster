@@ -162,3 +162,23 @@ changes. This is encouraging for this generated workload but does not rule out
 long-term leaks, measure total browser RSS, or test growing real identity counts.
 The demo uses no SQLite or host monitoring. Raw results:
 [browser-soak-2026-10-01.json](../benchmarks/results/browser-soak-2026-10-01.json).
+
+## Server memory separated from clients
+
+Phase 6 tests whether the earlier combined server/client RSS growth reflects
+sustained growth in the server. [Method, acceptance criteria, and results](research/server-memory.md)
+use a spawned production HTTP server, a separate load generator, and temporary
+synthetic SQLite history. Run:
+
+```bash
+python -m benchmarks.server_memory --duration 600 --cooldown 60
+```
+
+Fifty clients completed 36,000 live/history requests over ten minutes with zero
+HTTP/validation/write failures. During the final five loaded minutes, server USS
+stayed within 39.64–40.46 MiB, a 0.82 MiB band with approximately zero endpoint
+growth. Sampled threads stayed at seven and file descriptors returned to the
+baseline of 14 after traffic. Server RSS ended at 51.69 MiB and remained there
+after an idle minute and explicit GC. The criteria passed without a runtime
+change. This is evidence for a bounded sampled range under this fixed synthetic
+workload, not proof of long-term leak freedom or native-driver behavior.
