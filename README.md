@@ -161,6 +161,11 @@ Connected time is the union of a user's session intervals, clipped to each windo
 
 ## Current limits and next work
 
+An optional [read-only hardware validation command](docs/validation/hardware.md)
+checks NVML/CLI agreement, native worker memory, and worker recovery on a target
+host. Ordinary CI remains hardware-independent. The collector reports physical
+GPUs; per-MIG-instance monitoring is not implemented.
+
 The launcher uses Waitress with four HTTP threads, one collector thread, and a child NVML worker. A local advisory lock rejects a second launcher using the same database. SIGINT and SIGTERM stop the HTTP loop and collector; in-flight responses may be interrupted during shutdown. Use one instance on a local filesystem. The cache is process-local: there is no supported multi-worker web deployment yet.
 
 Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-driver or MIG compatibility certification. Slow OS process inspection can still delay a collection cycle, while clients continue to receive cached data with age/status. Cold history queries still occupy HTTP threads; shared results avoid duplicate aggregation. Larger retention, downsampling, and an independent collector service remain future architecture work.
