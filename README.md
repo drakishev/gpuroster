@@ -32,7 +32,9 @@ Replace the example SSH destination with your own. Open the same local URL after
 
 ## Installed command
 
-After `pip install .`, run `venv/bin/gpuroster` from any directory. `venv/bin/gpuroster --version` reports the installed version. Templates and dashboard JavaScript are included in the wheel; chart and style CDN assets still need internet access. GPU Roster is supported on Linux with Python 3.10 or newer.
+After `pip install .`, activate the environment and run `gpuroster` from any directory. `gpuroster --version` reports the installed version. Templates and dashboard JavaScript are included in the wheel; chart and style CDN assets still need internet access. GPU Roster is supported on Linux with Python 3.10 or newer.
+
+See the [deployment guide](docs/deployment.md) for systemd, password files, persistent state, SSH/TLS access, and migration/rollback. The [production-serving decision](docs/architecture/ADR-004-production-deployment.md) records alternatives and measured results.
 
 ## Access and privacy
 
@@ -70,6 +72,8 @@ Process owners, PIDs, and executable names remain available to authorized viewer
 
 Boolean options accept `0`, `1`, `false`, or `true`. Environment variables are read at startup; `.env` files are not loaded automatically. Keep databases and credentials outside Git.
 
+When neither password option is set, the launcher also reads `dashboard-password` from systemd's `CREDENTIALS_DIRECTORY` if provided. A missing or empty configured credential fails startup.
+
 ## Development and checks
 
 Ordinary tests need no GPU, login records, credentials, or production database. Browser tests intercept metrics and CDN requests with synthetic fixtures.
@@ -91,7 +95,7 @@ Backend tests alone need only the runtime dependencies:
 venv/bin/python -m unittest discover -s tests -v
 ```
 
-[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, builds a wheel from the source distribution, tests a clean installation outside the checkout, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 2 validation](docs/validation/phase-two.md), and [contribution guidelines](CONTRIBUTING.md).
+[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, builds a wheel from the source distribution, tests a clean installation outside the checkout, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 3 validation](docs/validation/phase-three.md), and [contribution guidelines](CONTRIBUTING.md).
 
 ## Architecture
 

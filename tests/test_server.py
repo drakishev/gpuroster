@@ -115,6 +115,19 @@ class ServerTests(unittest.TestCase):
             create_app()
         self.assertFalse(state.exists())
 
+    def test_systemd_credential_directory_is_supported_without_specifier_expansion(
+        self,
+    ):
+        password = secrets.token_urlsafe(24)
+        (self.directory / "dashboard-password").write_text(password)
+        config = load_settings(
+            {
+                "GPUROSTER_AUTH_USER": "viewer",
+                "CREDENTIALS_DIRECTORY": str(self.directory),
+            }
+        )
+        self.assertEqual(config["AUTH_PASSWORD"], password)
+
 
 if __name__ == "__main__":
     unittest.main()

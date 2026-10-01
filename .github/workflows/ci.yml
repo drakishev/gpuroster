@@ -33,6 +33,10 @@ jobs:
       - run: node --check gpuroster/static/dashboard.js
       - run: bash -n start.sh
       - run: git diff --check
+      - name: Validate systemd unit syntax without installing a service
+        run: |
+          sed 's|ExecStart=/opt/gpuroster/venv/bin/gpuroster|ExecStart=/usr/bin/true|' deploy/gpuroster.service > "$RUNNER_TEMP/gpuroster.service"
+          systemd-analyze verify "$RUNNER_TEMP/gpuroster.service"
 
   backend:
     runs-on: ubuntu-latest

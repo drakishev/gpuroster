@@ -1,0 +1,4 @@
+include scripts/smoke_install.py
+recursive-include deploy *.service *.example
+recursive-include docs *.md
+recursive-include tests/browser *.py

@@ -18,6 +18,8 @@ def load_settings(environ=None):
     username = env.get("GPUROSTER_AUTH_USER", "")
     password = env.get("GPUROSTER_AUTH_PASSWORD", "")
     password_file = env.get("GPUROSTER_AUTH_PASSWORD_FILE", "")
+    if not password_file and not password and env.get("CREDENTIALS_DIRECTORY"):
+        password_file = str(Path(env["CREDENTIALS_DIRECTORY"]) / "dashboard-password")
     if password_file:
         if password:
             raise ValueError("Choose a password or a password file, not both")

@@ -1,0 +1,36 @@
+[Unit]
+Description=GPU Roster shared GPU dashboard
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=exec
+User=gpuroster
+Group=gpuroster
+WorkingDirectory=/var/lib/gpuroster
+StateDirectory=gpuroster
+StateDirectoryMode=0700
+ExecStart=/opt/gpuroster/venv/bin/gpuroster
+Environment=GPUROSTER_HOST=127.0.0.1
+Environment=GPUROSTER_DB_PATH=/var/lib/gpuroster/history.db
+EnvironmentFile=/etc/gpuroster/gpuroster.conf
+LoadCredential=dashboard-password:/etc/gpuroster/password
+UMask=0077
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=120
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

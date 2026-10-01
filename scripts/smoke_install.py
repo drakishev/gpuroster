@@ -38,7 +38,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="gpuroster-install-") as directory:
         root = Path(directory)
         password = secrets.token_urlsafe(24)
-        password_file = root / "password"
+        password_file = root / "dashboard-password"
         password_file.write_text(password + "\n")
         password_file.chmod(0o600)
         with socket.socket() as sock:
@@ -56,7 +56,7 @@ def main():
             GPUROSTER_GPU_BACKEND="smi",
             GPUROSTER_COLLECT_INTERVAL="0.1",
             GPUROSTER_AUTH_USER="viewer",
-            GPUROSTER_AUTH_PASSWORD_FILE=str(password_file),
+            CREDENTIALS_DIRECTORY=directory,
             XDG_STATE_HOME=str(root / "state"),
         )
         assert (
@@ -99,10 +99,13 @@ def main():
                 assert request(url + "/api/sessions", password)[0] == 403
                 assert request(url + "/", "incorrect")[0] == 401
                 assert (root / "state/gpuroster/history.db").is_file()
+                with socket.socket() as other_socket:
+                    other_socket.bind(("127.0.0.1", 0))
+                    other_port = other_socket.getsockname()[1]
                 duplicate = subprocess.run(
                     [executable],
                     cwd=directory,
-                    env=env,
+                    env={**env, "GPUROSTER_PORT": str(other_port)},
                     capture_output=True,
                     timeout=10,
                 )
