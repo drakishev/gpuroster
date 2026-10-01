@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from monitoring.models import GPU, System
-from monitoring.service import CollectorService
-from monitoring.sessions import SessionRecords
-from settings import load_settings
+from gpuroster.monitoring.models import GPU, System
+from gpuroster.monitoring.service import CollectorService
+from gpuroster.monitoring.sessions import SessionRecords
+from gpuroster.settings import load_settings
 
 
 class ServiceTests(unittest.TestCase):
@@ -81,7 +81,8 @@ class ServiceTests(unittest.TestCase):
         self.service.collect_once()
         timestamp = self.service.snapshot()["timestamp"]
         with patch(
-            "monitoring.service.time.monotonic", return_value=time.monotonic() + 20
+            "gpuroster.monitoring.service.time.monotonic",
+            return_value=time.monotonic() + 20,
         ):
             data = self.service.snapshot()
         self.assertEqual(data["health"]["sources"]["gpus"]["status"], "stale")
@@ -101,12 +102,12 @@ class ServiceTests(unittest.TestCase):
     def test_optional_sessions_have_independent_cadence_and_visible_truncation(self):
         self.service.config["SHOW_SESSIONS"] = True
         self.sessions.records.return_value = SessionRecords((), truncated=True)
-        with patch("monitoring.service.time.monotonic", return_value=100):
+        with patch("gpuroster.monitoring.service.time.monotonic", return_value=100):
             self.service.collect_once()
-        with patch("monitoring.service.time.monotonic", return_value=103):
+        with patch("gpuroster.monitoring.service.time.monotonic", return_value=103):
             self.service.collect_once()
         self.sessions.records.assert_called_once()
-        with patch("monitoring.service.time.monotonic", return_value=161):
+        with patch("gpuroster.monitoring.service.time.monotonic", return_value=161):
             self.service.collect_once()
             data = self.service.snapshot()
         self.assertEqual(self.sessions.records.call_count, 2)
@@ -115,7 +116,7 @@ class ServiceTests(unittest.TestCase):
 
     def test_repeated_source_failures_are_rate_limited(self):
         self.gpu.gpus.side_effect = RuntimeError("PRIVATE_TEST_MARKER")
-        with patch("monitoring.service.LOG.warning") as warning:
+        with patch("gpuroster.monitoring.service.LOG.warning") as warning:
             self.service.collect_once()
             self.service.collect_once()
         warning.assert_called_once_with(

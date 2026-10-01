@@ -17,15 +17,17 @@ import threading
 import time
 import urllib.request
 from pathlib import Path
+from functools import partial
 
 import psutil
 from werkzeug.serving import WSGIRequestHandler, make_server
 
-from app import create_app
-from monitoring.models import GPU, GPUProcess, System
-from monitoring.nvml import NVMLWorker
-from monitoring.service import CollectorService
-from settings import load_settings
+from gpuroster.app import create_app
+from gpuroster.monitoring.models import GPU, GPUProcess, System
+from gpuroster.monitoring.nvml import NVMLWorker
+from gpuroster.monitoring.service import CollectorService
+from gpuroster.settings import load_settings
+from gpuroster.server import HTTPServer
 
 
 class FixtureGPU:
@@ -76,7 +78,7 @@ def percentiles(values):
     }
 
 
-def http_case(clients, duration):
+def http_case(clients, duration, server_kind="werkzeug"):
     with tempfile.TemporaryDirectory() as directory:
         config = load_settings({"GPUROSTER_COLLECT_INTERVAL": "0.25"})
         config["DB_PATH"] = str(Path(directory) / "history.db")
@@ -90,12 +92,20 @@ def http_case(clients, duration):
             service.history.append(devices, now - (120 - point) * 0.25)
         service.collect_once()
         application = create_app(config, service)
-        server = make_server(
-            "127.0.0.1", 0, application, threaded=True, request_handler=QuietHandler
-        )
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        stop = threading.Event()
+        if server_kind == "waitress":
+            server = HTTPServer(application, "127.0.0.1", 0)
+            target = partial(server.run, stop)
+            port = server.server.effective_port
+        else:
+            server = make_server(
+                "127.0.0.1", 0, application, threaded=True, request_handler=QuietHandler
+            )
+            target = server.serve_forever
+            port = server.server_port
+        thread = threading.Thread(target=target, daemon=True)
         thread.start()
-        url = f"http://127.0.0.1:{server.server_port}/api/stats"
+        url = f"http://127.0.0.1:{port}/api/stats"
         service.start()
         before_calls = gpu.calls
         latencies = []
@@ -131,6 +141,7 @@ def http_case(clients, duration):
                 "Collection multiplied with clients"
             )
             return {
+                "server": server_kind,
                 "clients": clients,
                 "duration_s": round(elapsed, 3),
                 "api_requests": len(latencies),
@@ -143,9 +154,14 @@ def http_case(clients, duration):
             }
         finally:
             service.stop()
-            server.shutdown()
-            thread.join(3)
-            server.server_close()
+            if server_kind == "waitress":
+                stop.set()
+                thread.join(3)
+                server.close()
+            else:
+                server.shutdown()
+                thread.join(3)
+                server.server_close()
 
 
 def native_case():
@@ -184,11 +200,14 @@ def main():
     parser.add_argument("--clients", type=int)
     parser.add_argument("--duration", type=float, default=3)
     parser.add_argument("--nvml", action="store_true")
+    parser.add_argument(
+        "--server", choices=("werkzeug", "waitress"), default="werkzeug"
+    )
     args = parser.parse_args()
     if args.nvml:
         print(json.dumps(native_case(), indent=2))
     elif args.clients:
-        print(json.dumps(http_case(args.clients, args.duration)))
+        print(json.dumps(http_case(args.clients, args.duration, args.server)))
     else:
         result = []
         for clients in (1, 5, 20, 50):
@@ -201,6 +220,8 @@ def main():
                     str(clients),
                     "--duration",
                     str(args.duration),
+                    "--server",
+                    args.server,
                 ],
                 capture_output=True,
                 text=True,

@@ -4,7 +4,7 @@ import sys
 import time
 from unittest.mock import Mock, patch
 
-from monitoring.collectors import (
+from gpuroster.monitoring.collectors import (
     CollectionError,
     CommandRunner,
     NvidiaSMI,
@@ -28,7 +28,9 @@ class CollectorTests(unittest.TestCase):
             ),
         ]:
             with (
-                patch("monitoring.collectors.subprocess.run", side_effect=error),
+                patch(
+                    "gpuroster.monitoring.collectors.subprocess.run", side_effect=error
+                ),
                 self.assertRaisesRegex(CollectionError, code),
             ):
                 CommandRunner()(["tool"])
@@ -37,7 +39,8 @@ class CollectorTests(unittest.TestCase):
         with (
             patch.dict("os.environ", {"GPUROSTER_AUTH_PASSWORD": "TEST_ONLY"}),
             patch(
-                "monitoring.collectors.subprocess.run", return_value=Mock(stdout="ok")
+                "gpuroster.monitoring.collectors.subprocess.run",
+                return_value=Mock(stdout="ok"),
             ) as run,
         ):
             self.assertEqual(CommandRunner()(["tool"]), "ok")
@@ -49,7 +52,9 @@ class CollectorTests(unittest.TestCase):
         process = Mock()
         process.username.return_value = "example-user"
         process.cmdline.return_value = ["python", "x" * 200]
-        with patch("monitoring.collectors.psutil.Process", return_value=process):
+        with patch(
+            "gpuroster.monitoring.collectors.psutil.Process", return_value=process
+        ):
             rows = NvidiaSMI(Mock(return_value="123, GPU-example, 10"), True).processes(
                 ()
             )
@@ -78,7 +83,9 @@ class CollectorTests(unittest.TestCase):
         process = Mock()
         process.username.return_value = "example-user"
         process.name.return_value = "python"
-        with patch("monitoring.collectors.psutil.Process", return_value=process):
+        with patch(
+            "gpuroster.monitoring.collectors.psutil.Process", return_value=process
+        ):
             processes = provider.processes(provider.gpus())
         self.assertEqual(runner.call_count, 2)
         self.assertEqual(processes[0].gpu, 2)
@@ -100,10 +107,16 @@ class CollectorTests(unittest.TestCase):
     def test_cpu_warms_up_and_too_short_intervals_are_unknown(self):
         collector = SystemCollector()
         with (
-            patch("monitoring.collectors.time.monotonic", side_effect=[1, 4, 4.01]),
-            patch("monitoring.collectors.psutil.cpu_percent", side_effect=[0, 25, 0]),
             patch(
-                "monitoring.collectors.psutil.virtual_memory",
+                "gpuroster.monitoring.collectors.time.monotonic",
+                side_effect=[1, 4, 4.01],
+            ),
+            patch(
+                "gpuroster.monitoring.collectors.psutil.cpu_percent",
+                side_effect=[0, 25, 0],
+            ),
+            patch(
+                "gpuroster.monitoring.collectors.psutil.virtual_memory",
                 return_value=Mock(used=100, total=1000, percent=10),
             ),
         ):
@@ -116,10 +129,10 @@ class CollectorTests(unittest.TestCase):
         collector.last_sample = 1
         collector.reset()
         with (
-            patch("monitoring.collectors.time.monotonic", return_value=5),
-            patch("monitoring.collectors.psutil.cpu_percent", return_value=0),
+            patch("gpuroster.monitoring.collectors.time.monotonic", return_value=5),
+            patch("gpuroster.monitoring.collectors.psutil.cpu_percent", return_value=0),
             patch(
-                "monitoring.collectors.psutil.virtual_memory",
+                "gpuroster.monitoring.collectors.psutil.virtual_memory",
                 return_value=Mock(used=10, total=100, percent=10),
             ),
         ):

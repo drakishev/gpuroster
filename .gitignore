@@ -29,6 +29,7 @@ secrets*
 # Runtime databases, private datasets, logs, and exports
 *.db
 *.db-*
+*.db.lock
 *.sqlite
 *.sqlite-*
 *.sqlite3

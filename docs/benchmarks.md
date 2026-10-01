@@ -1,4 +1,4 @@
-# Phase 2 benchmarks
+# Collection, storage, and serving benchmarks
 
 Recorded 2026-10-01 on one Linux host, using Python 3.12. Results are observations, not production capacity or cross-driver guarantees. Committed output contains aggregate measurements and synthetic data only. No benchmark databases or real process/device identities are included.
 
@@ -55,4 +55,28 @@ Synthetic rows represent eight GPUs sampled once per minute for 1/7/30/90 days. 
 
 The additive legacy migration preserved rows. Retention reduced the 90-day cases to 357,128 rows, including the newest eight-row write. SQLite kept the allocated file size after deletion; this implementation does not automatically vacuum it. UUID storage costs more space than the original index-only schema. A normalized device table/downsampling could reduce cost, but no storage-engine replacement is justified by these measurements alone. Month queries remain synchronous database work and warrant caching or preaggregation if history traffic grows.
 
-Raw aggregate outputs are under [benchmarks/results](../benchmarks/results/). Future work includes longer soak tests, browser memory/load timing, multiple driver/GPU configurations, MIG behavior, and production-server benchmarks.
+## Production HTTP server
+
+Phase 3 hypothesis: four Waitress request threads can serve the shared snapshot without errors or request-driven collection. The acceptance criteria are zero invalid/failed requests and collector cycles consistent with elapsed time and the 250 ms schedule. Compare against the previous threaded Werkzeug server; no claim about other production servers is inferred.
+
+```bash
+python -m benchmarks.shared_collector --server waitress --duration 5
+python -m benchmarks.shared_collector --server werkzeug --duration 5
+```
+
+Recorded on the same Linux/Python 3.12 host on 2026-10-01, sequentially with a fresh process per case. Both use the same eight-GPU synthetic snapshot, 120 history points, and 200 ms client polling described above. Waitress is 3.0.2; Werkzeug is 3.1.9. Request completion can extend a nominal five-second run slightly. CPU and peak RSS include the load generator. No real devices are polled.
+
+| Server | Clients | Requests | Cycles | Errors | Median / p95 (ms) | CPU seconds | Peak RSS (MiB) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Waitress | 1 | 25 | 20 | 0 | 4.107 / 7.168 | 0.149 | 37.1 |
+| Waitress | 5 | 125 | 20 | 0 | 5.253 / 17.930 | 0.661 | 39.5 |
+| Waitress | 20 | 500 | 20 | 0 | 6.713 / 32.906 | 2.133 | 46.8 |
+| Waitress | 50 | 1,218 | 20 | 0 | 49.945 / 197.663 | 5.058 | 59.9 |
+| Werkzeug | 1 | 25 | 20 | 0 | 5.327 / 10.185 | 0.184 | 37.4 |
+| Werkzeug | 5 | 125 | 20 | 0 | 5.967 / 20.219 | 0.730 | 40.0 |
+| Werkzeug | 20 | 500 | 20 | 0 | 8.284 / 37.664 | 2.232 | 46.9 |
+| Werkzeug | 50 | 1,065 | 21 | 0 | 244.186 / 271.851 | 5.282 | 59.6 |
+
+Waitress passes the criteria and preserves collector independence. Its 50-client p95 is lower in this run, but this short test excludes slow clients, TLS/proxy overhead, and concurrent history aggregation. It establishes suitability for the measured workload, not a production capacity limit. [ADR-004](architecture/ADR-004-production-deployment.md) records the lifecycle and deployment tradeoffs.
+
+Raw aggregate outputs are under [benchmarks/results](../benchmarks/results/). Future work includes longer mixed live/history soak tests, browser memory/load timing, multiple driver/GPU configurations, and MIG behavior.

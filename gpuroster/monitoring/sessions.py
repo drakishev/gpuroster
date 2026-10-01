@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import psutil
 
-from monitoring.models import Session, utc_iso
+from gpuroster.monitoring.models import Session, utc_iso
 
 ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[+-]\d{2}:?\d{2}|Z)")
 RECORD_LIMIT = 2000

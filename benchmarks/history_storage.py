@@ -10,7 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from monitoring.history import HistoryStore
+from gpuroster.monitoring.history import HistoryStore
 
 
 def run_case(days, legacy=False):

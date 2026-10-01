@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from monitoring.models import utc_iso
+from gpuroster.monitoring.models import utc_iso
 
 
 class RollingHistory:

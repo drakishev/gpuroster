@@ -5,16 +5,16 @@ import logging
 import threading
 import time
 
-from monitoring.collectors import (
+from gpuroster.monitoring.collectors import (
     CollectionError,
     CommandRunner,
     NvidiaSMI,
     SystemCollector,
 )
-from monitoring.history import HistoryStore, RollingHistory
-from monitoring.models import MetricSnapshot, utc_iso
-from monitoring.nvml import AutoGPU, NVMLWorker
-from monitoring.sessions import (
+from gpuroster.monitoring.history import HistoryStore, RollingHistory
+from gpuroster.monitoring.models import MetricSnapshot, utc_iso
+from gpuroster.monitoring.nvml import AutoGPU, NVMLWorker
+from gpuroster.monitoring.sessions import (
     SessionCollector,
     SessionRecords,
     connection_rows,
