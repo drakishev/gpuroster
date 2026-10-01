@@ -4,9 +4,11 @@ const sessionsEnabled = document.body.dataset.sessionsEnabled === 'true';
 const requestTimeout = Number(document.body.dataset.requestTimeoutMs) || 14000;
 const panelErrors = new Map();
 let lastSuccess = 0;
+let collectionStale = false;
 let utilRange = 'live';
 let historyRequest = 0;
 let lastHistory = {};
+let historyDevices = {};
 let loginPeriod = 'week';
 let loginData = {};
 let sessionUserFilter = null;
@@ -53,7 +55,7 @@ function userColor(user) {
 }
 
 function showStatus() {
-  const stale = lastSuccess && Date.now() - lastSuccess > 15000;
+  const stale = collectionStale || (lastSuccess && Date.now() - lastSuccess > 15000);
   const errors = [...panelErrors.values()];
   byId('connection-status').textContent = stale ? 'STALE' : errors.length ? 'PARTIAL' : lastSuccess ? 'LIVE' : 'CONNECTING';
   const message = stale ? 'Updates are delayed. Displayed values may be out of date. ' : '';
@@ -141,7 +143,7 @@ function renderProcTable(processes) {
   if (!processes.length) return tableMessage('proc-tbody', 4, 'No GPU processes');
   byId('proc-tbody').replaceChildren(...processes.map(process => {
     const row = element('tr');
-    row.append(cell(pill(process.user)), cell('GPU ' + process.gpu, 'font-mono text-indigo-300'), cell(fmtMemory(process.mem_mb), 'text-right text-purple-300'), cell(process.command, 'font-mono text-xs text-slate-400 max-w-xs truncate'));
+    row.append(cell(pill(process.user)), cell(process.gpu === null ? 'Unmapped GPU' : 'GPU ' + process.gpu, 'font-mono text-indigo-300'), cell(fmtMemory(process.mem_mb), 'text-right text-purple-300'), cell(process.command, 'font-mono text-xs text-slate-400 max-w-xs truncate'));
     return row;
   }));
 }
@@ -152,7 +154,7 @@ function renderUserGPUTable(users) {
   byId('user-gpu-tbody').replaceChildren(...names.map(name => {
     const info = users[name];
     const row = element('tr');
-    row.append(cell(pill(name)), cell(info.gpu_indices.join(', ')), cell(finite(info.mem_gb) ? info.mem_gb + ' GiB' : 'Unavailable', 'text-right text-purple-300'), cell(info.proc_count, 'text-right'), cell('Active', 'text-center text-emerald-400'));
+    row.append(cell(pill(name)), cell(info.gpu_indices.join(', ') || 'Unmapped'), cell(finite(info.mem_gb) ? info.mem_gb + ' GiB' : 'Unavailable', 'text-right text-purple-300'), cell(info.proc_count, 'text-right'), cell('Active', 'text-center text-emerald-400'));
     return row;
   }));
 }
@@ -216,20 +218,23 @@ function renderSessionTable(sessions) {
 function applyChartData(labels, datasets) {
   if (!utilChart) return;
   utilChart.data.labels = labels;
-  utilChart.data.datasets = datasets.map(dataset => ({label: 'GPU ' + dataset.gpu, data: dataset.data, borderColor: colors[dataset.gpu % colors.length], backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, spanGaps: false}));
+  utilChart.data.datasets = datasets.map(dataset => ({label: dataset.label || 'GPU ' + dataset.gpu, data: dataset.data, borderColor: dataset.id ? userColor(dataset.id) : colors[dataset.gpu % colors.length], backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, spanGaps: false}));
   utilChart.update('none');
 }
 function renderLiveChart(history) {
-  // Sampler arrays preserve chronology, including the midnight transition.
+  // Epoch timestamps preserve chronology across midnight and clock/timezone changes.
   const arrays = Object.values(history);
   const longest = arrays.reduce((current, values) => values.length > current.length ? values : current, []);
-  const labels = longest.map(point => point.ts);
-  const datasets = Object.keys(history).sort((a, b) => Number(a) - Number(b)).map(index => {
-    const samples = new Map(history[index].map(point => [point.ts, point.util]));
-    return {gpu: Number(index), data: labels.map(label => samples.has(label) ? samples.get(label) : null)};
+  const timestamps = [...new Set(arrays.flat().map(point => point.ts))];
+  const ordered = timestamps.every(finite) ? timestamps.sort((a, b) => a - b) : longest.map(point => point.ts);
+  const labels = ordered.map(timestamp => finite(timestamp) ? new Date(timestamp * 1000).toISOString().slice(11, 19) : timestamp);
+  const datasets = Object.keys(history).sort().map(id => {
+    const samples = new Map(history[id].map(point => [point.ts, point.util]));
+    const device = historyDevices[id];
+    return {id, gpu: device ? device.index : id, data: ordered.map(timestamp => samples.has(timestamp) ? samples.get(timestamp) : null)};
   });
   applyChartData(labels, datasets);
-  byId('util-chart-title').textContent = 'GPU Utilization — Recent Samples (EMA smoothed)';
+  byId('util-chart-title').textContent = 'GPU Utilization — Recent Samples (UTC, EMA smoothed)';
   byId('util-chart-note').textContent = '';
 }
 async function fetchHistoryChart(range) {
@@ -237,7 +242,8 @@ async function fetchHistoryChart(range) {
   try {
     const data = await fetchJSON('/api/gpu_history?range=' + encodeURIComponent(range));
     if (request !== historyRequest || range !== utilRange) return;
-    applyChartData(data.labels, data.datasets);
+    const labels = data.labels.map(label => /^\d{4}-\d{2}-\d{2}T/.test(label) ? label.slice(0, 16).replace('T', ' ') + ' UTC' : label);
+    applyChartData(labels, data.datasets);
     const titles = {today: 'Today (5-min avg)', week: 'Last 7 days (hourly avg)', month: 'Last 30 days (6-hour avg)'};
     byId('util-chart-title').textContent = 'GPU Utilization — ' + titles[range];
     byId('util-chart-note').textContent = data.points ? data.points + ' data points' : 'No data yet — history builds up as the server runs.';
@@ -264,8 +270,10 @@ async function fetchStats() {
   try {
     const data = await fetchJSON('/api/stats');
     const sources = data.health.sources;
-    const labels = {gpus: 'GPU metrics', processes: 'Process metrics', system: 'System metrics', connections: 'SSH connections', history: 'History collection'};
+    collectionStale = ['gpus', 'processes', 'system'].some(source => sources[source].status === 'stale');
+    const labels = {gpus: 'GPU metrics', processes: 'Process metrics', system: 'System metrics', connections: 'SSH connections', sessions: 'Session records', history: 'History collection'};
     for (const [source, label] of Object.entries(labels)) {
+      if (!sources[source]) continue;
       const state = sources[source].status;
       setError(source, ['ok', 'disabled'].includes(state) ? null : label + ' unavailable or delayed.');
     }
@@ -289,6 +297,7 @@ async function fetchStats() {
       else tableMessage('conn-tbody', 5, 'Connection details unavailable.');
     }
     lastHistory = data.history;
+    historyDevices = data.history_devices || {};
     if (utilRange === 'live') renderLiveChart(lastHistory);
     lastSuccess = Date.now();
     byId('last-update').textContent = new Date(data.timestamp).toLocaleTimeString();

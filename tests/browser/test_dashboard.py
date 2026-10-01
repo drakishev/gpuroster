@@ -1,4 +1,4 @@
-"""Real Chromium DOM/network regressions, with synthetic API and CDN fixtures."""
+"""Chromium DOM/network regressions; run discovery in tests/browser separately."""
 
 import copy
 import threading
@@ -71,16 +71,9 @@ class BrowserTests(unittest.TestCase):
         )
         cls.configuration.start()
         cls.collectors = []
-        for name in (
-            "get_gpu_stats",
-            "get_gpu_processes",
-            "get_system_stats",
-            "get_login_stats",
-            "get_user_sessions",
-            "get_active_connections",
-        ):
+        for name in ("snapshot",):
             guard = patch.object(
-                app,
+                app.app.extensions["collector"],
                 name,
                 side_effect=AssertionError("Browser tests must use synthetic fixtures"),
             )
@@ -258,6 +251,37 @@ class BrowserTests(unittest.TestCase):
         self.load()
         self.page.evaluate("lastSuccess = Date.now() - 16000; showStatus()")
         self.assertEqual(self.page.locator("#connection-status").inner_text(), "STALE")
+
+    def test_collector_staleness_is_visible_even_when_http_is_healthy(self):
+        self.stats["health"]["sources"]["gpus"] = {"status": "stale"}
+        self.load()
+        self.assertEqual(self.page.locator("#connection-status").inner_text(), "STALE")
+        self.assertIn("delayed", self.page.locator("#status-banner").inner_text())
+
+    def test_epoch_history_preserves_midnight_order_and_uuid_identity(self):
+        self.stats["history"] = {
+            "GPU-example": [
+                {"ts": 1767225599, "util": 10},
+                {"ts": 1767225602, "util": 42},
+            ]
+        }
+        self.stats["history_devices"] = {"GPU-example": {"index": 2}}
+        self.load()
+        self.assertEqual(
+            self.page.evaluate("testCharts[0].data.labels"), ["23:59:59", "00:00:02"]
+        )
+        self.assertEqual(
+            self.page.evaluate("testCharts[0].data.datasets[0].label"), "GPU 2"
+        )
+        color = self.page.evaluate("testCharts[0].data.datasets[0].borderColor")
+        self.stats["history_devices"]["GPU-example"]["index"] = 0
+        self.page.evaluate("fetchStats()")
+        self.assertEqual(
+            self.page.evaluate("testCharts[0].data.datasets[0].label"), "GPU 0"
+        )
+        self.assertEqual(
+            self.page.evaluate("testCharts[0].data.datasets[0].borderColor"), color
+        )
 
     def test_missing_chart_dependency_does_not_stop_metric_tables(self):
         self.page.unroute("https://cdn.jsdelivr.net/**")

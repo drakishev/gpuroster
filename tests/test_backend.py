@@ -1,20 +1,19 @@
-"""Hardware-independent regressions. All persistence uses temporary databases."""
+"""Flask access/API regressions: all collection and persistence are synthetic."""
 
 import base64
 import importlib.util
 import secrets
 import sqlite3
-import subprocess
-import sys
 import tempfile
 import threading
-import time
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import app
+from monitoring.models import GPU, GPUProcess, System
+from monitoring.service import CollectorService
+from monitoring.sessions import SessionRecords
 from settings import load_settings
 
 
@@ -23,47 +22,32 @@ class BackendTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory(prefix="gpuroster-test-")
         self.addCleanup(directory.cleanup)
         self.db = str(Path(directory.name) / "history.db")
-        for patcher in (
-            patch.dict(app.app.config, {**load_settings({}), "TESTING": True}),
-            patch.object(app, "DB_PATH", self.db),
-            patch.object(app, "_last_db_write", 0),
-            patch.dict(app._gpu_history, {}, clear=True),
-            patch.dict(app._gpu_ema, {}, clear=True),
-            patch.dict(app._failure_logs, {}, clear=True),
-            patch.dict(
-                app._sampler_health,
-                {"status": "not_started", "last_sample": None, "last_write": None},
-                clear=True,
-            ),
-        ):
-            patcher.start()
-            self.addCleanup(patcher.stop)
-        self.client = app.app.test_client()
+        self.config = {**load_settings({}), "DB_PATH": self.db, "TESTING": True}
+        self.gpu = Mock()
+        self.gpu.name = "fixture"
+        self.gpu.gpus.return_value = (
+            GPU(0, "GPU-example", "Example GPU", 42, 10, 100, 40, 50),
+        )
+        self.gpu.processes.return_value = ()
+        self.system = Mock()
+        self.system.collect.return_value = System(12, 100, 1000, 10)
+        self.sessions = Mock()
+        self.sessions.records.return_value = SessionRecords(())
+        self.sessions.connections.return_value = ()
+        self.service = CollectorService(
+            self.config, self.db, self.gpu, self.system, self.sessions
+        )
+        self.application = app.create_app(self.config, self.service)
+        self.client = self.application.test_client()
 
-    def mock_stats(self):
-        for name, value in (
-            ("get_gpu_stats", []),
-            ("get_gpu_processes", []),
-            (
-                "get_system_stats",
-                {
-                    "cpu_percent": 12,
-                    "ram_used_gb": 1,
-                    "ram_total_gb": 4,
-                    "ram_percent": 25,
-                },
-            ),
-            ("get_active_connections", []),
-        ):
-            patcher = patch.object(app, name, return_value=value)
-            patcher.start()
-            self.addCleanup(patcher.stop)
+    def ready(self):
+        self.service.collect_once()
 
     def enable_auth(self):
         password = secrets.token_hex(24)
-        app.app.config.update(AUTH_USER="viewer", AUTH_PASSWORD=password)
-        encoded = base64.b64encode(f"viewer:{password}".encode()).decode()
-        return {"Authorization": "Basic " + encoded}
+        self.application.config.update(AUTH_USER="viewer", AUTH_PASSWORD=password)
+        value = base64.b64encode(f"viewer:{password}".encode()).decode()
+        return {"Authorization": "Basic " + value}
 
     def test_import_has_no_database_or_sampler_side_effects(self):
         spec = importlib.util.spec_from_file_location("import_audit", app.__file__)
@@ -77,57 +61,51 @@ class BackendTests(unittest.TestCase):
         start.assert_not_called()
 
     def test_safe_defaults_and_hidden_session_panels(self):
-        self.assertEqual(app.app.config["BIND_HOST"], "127.0.0.1")
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b'id="conn-tbody"', response.data)
         self.assertNotIn(b'id="session-tbody"', response.data)
         self.assertIn(b'data-sessions-enabled="false"', response.data)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertEqual(self.application.config["BIND_HOST"], "127.0.0.1")
 
-    def test_session_endpoints_are_disabled_before_collection(self):
-        with (
-            patch.object(app, "_run") as run,
-            patch.object(app, "get_active_connections") as connections,
-        ):
+    def test_session_endpoints_are_disabled_before_cache_access(self):
+        with patch.object(self.service, "snapshot") as snapshot:
             for route in ("/api/login_stats", "/api/sessions", "/api/connections"):
                 self.assertEqual(self.client.get(route).status_code, 403)
-        run.assert_not_called()
-        connections.assert_not_called()
-
-    def test_stats_does_not_collect_disabled_session_details(self):
-        self.mock_stats()
-        response = self.client.get("/api/stats")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json["connections"], [])
-        app.get_active_connections.assert_not_called()
+        snapshot.assert_not_called()
+        self.sessions.records.assert_not_called()
 
     def test_remote_requests_and_dns_rebinding_are_denied(self):
-        with patch.object(app, "get_gpu_stats") as collector:
-            response = self.client.get(
-                "/api/stats",
-                environ_overrides={"REMOTE_ADDR": "192.0.2.10"},
-                headers={"X-Forwarded-For": "127.0.0.1"},
-            )
-            self.assertEqual(response.status_code, 403)
-            response = self.client.get(
-                "/api/stats", base_url="http://untrusted.example"
-            )
-            self.assertEqual(response.status_code, 403)
-        collector.assert_not_called()
+        for options in (
+            {
+                "environ_overrides": {"REMOTE_ADDR": "192.0.2.10"},
+                "headers": {"X-Forwarded-For": "127.0.0.1"},
+            },
+            {"base_url": "http://untrusted.example"},
+        ):
+            self.assertEqual(self.client.get("/api/stats", **options).status_code, 403)
+        self.gpu.gpus.assert_not_called()
 
-    def test_auth_covers_home_api_and_static_before_collection(self):
+    def test_auth_covers_home_api_and_static_before_cache_access(self):
         headers = self.enable_auth()
-        with patch.object(app, "get_gpu_stats") as collector:
-            for route in ("/", "/api/stats", "/static/dashboard.js"):
+        with patch.object(self.service, "snapshot") as snapshot:
+            for route in (
+                "/",
+                "/api/stats",
+                "/static/dashboard.js",
+                "/api/gpu_history",
+            ):
                 response = self.client.get(route)
                 self.assertEqual(response.status_code, 401)
                 self.assertIn("Basic", response.headers["WWW-Authenticate"])
-            collector.assert_not_called()
-        response = self.client.get(
-            "/", headers=headers, environ_overrides={"REMOTE_ADDR": "192.0.2.10"}
+            snapshot.assert_not_called()
+        self.assertEqual(
+            self.client.get(
+                "/", headers=headers, environ_overrides={"REMOTE_ADDR": "192.0.2.10"}
+            ).status_code,
+            200,
         )
-        self.assertEqual(response.status_code, 200)
 
     def test_invalid_and_malformed_auth_are_rejected(self):
         self.enable_auth()
@@ -141,138 +119,68 @@ class BackendTests(unittest.TestCase):
             )
 
     def test_remote_launcher_refuses_missing_auth(self):
-        app.app.config["BIND_HOST"] = "0.0.0.0"
+        self.application.config["BIND_HOST"] = "0.0.0.0"
         with (
-            patch.object(app, "start_sampler") as sampler,
+            patch.object(app, "app", self.application),
+            patch.object(self.service, "start") as start,
             self.assertRaises(SystemExit),
         ):
             app.main()
-        sampler.assert_not_called()
+        start.assert_not_called()
 
-    def test_process_arguments_are_not_read_by_default(self):
-        process = Mock()
-        process.username.return_value = "example-user"
-        process.name.return_value = "python"
-        process.cmdline.return_value = [
-            "python",
-            "--credential",
-            "SENSITIVE_TEST_MARKER",
-        ]
+    def test_launcher_stops_collector_when_server_exits(self):
         with (
-            patch.object(app, "_build_uuid_map", return_value={"GPU-example": 0}),
-            patch.object(app, "_run", return_value="123, GPU-example, 1024"),
-            patch.object(app.psutil, "Process", return_value=process),
+            patch.object(app, "app", self.application),
+            patch.object(self.application, "run"),
+            patch.object(self.service, "start") as start,
+            patch.object(self.service, "stop") as stop,
         ):
-            self.assertEqual(app.get_gpu_processes()[0]["command"], "python")
-            process.cmdline.assert_not_called()
-            app.app.config["SHOW_COMMANDS"] = True
-            self.assertIn(
-                "SENSITIVE_TEST_MARKER", app.get_gpu_processes()[0]["command"]
-            )
+            app.main()
+        start.assert_called_once()
+        stop.assert_called_once()
 
-    def test_command_failures_are_safe_and_distinguishable(self):
-        for error, expected in (
-            (FileNotFoundError("private path"), "command_missing"),
-            (
-                subprocess.TimeoutExpired(["tool"], 1, stderr="private output"),
-                "command_timeout",
-            ),
-            (
-                subprocess.CalledProcessError(1, ["tool"], stderr="private output"),
-                "command_failed",
-            ),
-        ):
-            with (
-                self.subTest(expected=expected),
-                patch.object(app.subprocess, "run", side_effect=error),
-                self.assertRaises(app.CollectionError) as caught,
-            ):
-                app._run(["tool"])
-            self.assertEqual(str(caught.exception), expected)
+    def test_unstarted_collector_returns_visible_unavailability_without_polling(self):
+        response = self.client.get("/api/stats")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json["error"], "collector_not_ready")
+        self.gpu.gpus.assert_not_called()
+        self.assertFalse(Path(self.db).exists())
 
-    def test_real_subprocess_timeout_is_bounded(self):
-        app.app.config["COMMAND_TIMEOUT"] = 0.05
-        started = time.monotonic()
-        with self.assertRaisesRegex(app.CollectionError, "command_timeout"):
-            app._run([sys.executable, "-c", "import time; time.sleep(5)"])
-        self.assertLess(time.monotonic() - started, 2)
+    def test_many_api_reads_share_the_same_sample(self):
+        self.ready()
+        for _ in range(20):
+            response = self.client.get("/api/stats")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json["sequence"], 1)
+            self.assertEqual(response.json["gpus"][0]["uuid"], "GPU-example")
+            self.assertNotIn("sessions", response.json)
+        self.gpu.gpus.assert_called_once()
+        self.gpu.processes.assert_called_once()
+        self.system.collect.assert_called_once()
+        self.sessions.records.assert_not_called()
 
-    def test_collector_children_do_not_inherit_dashboard_credentials(self):
-        with (
-            patch.dict(app.os.environ, {"GPUROSTER_AUTH_PASSWORD": "TEST_ONLY"}),
-            patch.object(app.subprocess, "run", return_value=Mock(stdout="ok")) as run,
-        ):
-            self.assertEqual(app._run(["tool"]), "ok")
-        self.assertNotIn("GPUROSTER_AUTH_PASSWORD", run.call_args.kwargs["env"])
-        self.assertEqual(run.call_args.kwargs["env"]["LC_ALL"], "C")
-
-    def test_sampler_start_is_idempotent_within_one_process(self):
-        thread = Mock()
-        thread.is_alive.return_value = True
-        with (
-            patch.object(app, "_sampler_thread", None),
-            patch.object(app, "_sampler_stop"),
-            patch.object(app.threading, "Thread", return_value=thread) as constructor,
-        ):
-            app.start_sampler()
-            app.start_sampler()
-        constructor.assert_called_once()
-        thread.start.assert_called_once()
-        self.assertTrue(Path(self.db).exists())
-
-    def test_unsupported_metrics_keep_the_gpu(self):
-        with patch.object(
-            app,
-            "_run",
-            return_value='0, "Example, GPU", N/A, 10, 100, [Not Supported], N/A',
-        ):
-            gpu = app.get_gpu_stats()[0]
-        self.assertEqual(gpu["name"], "Example, GPU")
-        self.assertIsNone(gpu["utilization"])
-        self.assertIsNone(gpu["temperature"])
-        self.assertIsNone(gpu["power"])
-
-    def test_malformed_gpu_output_is_visible(self):
-        for output in (
-            "driver diagnostic",
-            "0, Example, NaN, 10, 100, 20, 30",
-            "0, Example, -1, 10, 100, 20, 30",
-        ):
-            with (
-                patch.object(app, "_run", return_value=output),
-                self.assertRaises(app.CollectionError),
-            ):
-                app.get_gpu_stats()
-
-    def test_partial_failure_returns_health_without_private_error_text(self):
-        self.mock_stats()
-        app.get_gpu_stats.side_effect = app.CollectionError("command_timeout")
-        app.get_gpu_processes.side_effect = RuntimeError("PRIVATE_TEST_MARKER")
+    def test_partial_failure_exposes_safe_health_without_private_error_text(self):
+        self.gpu.gpus.side_effect = RuntimeError("PRIVATE_TEST_MARKER")
+        self.ready()
         response = self.client.get("/api/stats")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["health"]["status"], "degraded")
-        self.assertEqual(
-            response.json["health"]["sources"]["gpus"]["error"], "command_timeout"
-        )
         self.assertEqual(response.json["system"]["cpu_percent"], 12)
         self.assertNotIn(b"PRIVATE_TEST_MARKER", response.data)
 
-    def test_unknown_process_memory_is_not_reported_as_zero(self):
-        self.mock_stats()
-        app.get_gpu_processes.return_value = [
-            {
-                "gpu": 0,
-                "pid": 123,
-                "user": "example-user",
-                "command": "python",
-                "mem_mb": None,
-            }
-        ]
-        self.assertIsNone(
-            self.client.get("/api/stats").json["user_gpu"]["example-user"]["mem_gb"]
+    def test_unknown_memory_and_unmapped_gpu_identity_remain_unknown(self):
+        self.gpu.processes.return_value = (
+            GPUProcess("GPU-unmapped", None, 123, "example-user", "python", None),
+        )
+        self.ready()
+        data = self.client.get("/api/stats").json
+        self.assertIsNone(data["user_gpu"]["example-user"]["mem_gb"])
+        self.assertEqual(data["user_gpu"]["example-user"]["gpu_indices"], [])
+        self.assertEqual(
+            data["user_gpu"]["example-user"]["gpu_uuids"], ["GPU-unmapped"]
         )
 
-    def test_history_query_does_not_create_missing_database(self):
+    def test_history_read_does_not_create_database(self):
         self.assertEqual(self.client.get("/api/gpu_history").status_code, 503)
         self.assertFalse(Path(self.db).exists())
 
@@ -281,115 +189,36 @@ class BackendTests(unittest.TestCase):
             self.client.get("/api/gpu_history?range=invalid").status_code, 400
         )
 
-    def test_failed_database_write_can_retry_immediately(self):
-        app._init_db()
-        with patch.object(
-            app, "get_gpu_stats", return_value=[{"index": 0, "utilization": 20}]
-        ):
-            with (
-                patch.object(
-                    app.sqlite3,
-                    "connect",
-                    side_effect=sqlite3.OperationalError("test-only"),
-                ),
-                self.assertRaises(sqlite3.Error),
-            ):
-                app._sample_history()
-            self.assertEqual(app._last_db_write, 0)
-            app._sample_history()
-        with sqlite3.connect(self.db) as connection:
-            self.assertEqual(
-                connection.execute("SELECT COUNT(*) FROM gpu_util").fetchone()[0], 1
-            )
-        self.assertGreater(app._last_db_write, 0)
-        self.assertEqual(app.history_health()["status"], "ok")
+    def test_history_reads_persisted_sample_and_health(self):
+        self.ready()
+        response = self.client.get("/api/gpu_history?range=today")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["datasets"][0]["id"], "GPU-example")
+        self.assertEqual(response.json["health"]["status"], "ok")
+        self.gpu.gpus.assert_called_once()
 
-    def test_unavailable_utilization_is_a_gap_not_zero(self):
-        app._init_db()
-        with patch.object(
-            app, "get_gpu_stats", return_value=[{"index": 0, "utilization": None}]
-        ):
-            app._sample_history()
-        self.assertIsNone(app._gpu_history[0][0]["util"])
-        with sqlite3.connect(self.db) as connection:
-            self.assertEqual(
-                connection.execute("SELECT COUNT(*) FROM gpu_util").fetchone()[0], 0
-            )
+    def test_enabled_session_endpoints_use_one_cached_collection(self):
+        self.service.config["SHOW_SESSIONS"] = self.application.config[
+            "SHOW_SESSIONS"
+        ] = True
+        self.ready()
+        for _ in range(5):
+            for route in ("/api/login_stats", "/api/sessions", "/api/connections"):
+                response = self.client.get(route)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.headers["X-Snapshot-Sequence"], "1")
+        self.sessions.connections.assert_called_once()
+        self.sessions.records.assert_called_once()
 
-    def test_sampler_error_is_observable(self):
-        stop = Mock()
-        stop.is_set.side_effect = [False, True]
-        with (
-            patch.object(app, "_sampler_stop", stop),
-            patch.object(
-                app,
-                "_sample_history",
-                side_effect=app.CollectionError("command_missing"),
-            ),
-        ):
-            app._history_sampler()
-        self.assertEqual(app.history_health()["error"], "command_missing")
-
-    def test_history_health_detects_staleness(self):
-        app._sampler_health.update(status="ok", last_sample=time.time() - 30)
-        self.assertEqual(app.history_health()["status"], "stale")
-
-    def test_repeated_failure_logging_is_rate_limited(self):
-        with patch.object(app.app.logger, "warning") as warning:
-            app._log_failure("history", "history_failed")
-            app._log_failure("history", "history_failed")
-            app._log_failure("history", "command_missing")
-        self.assertEqual(warning.call_count, 2)
-
-    def test_spoofed_ssh_processes_are_rejected(self):
-        def process(title, owner="example-user", executable="/usr/sbin/sshd"):
-            return SimpleNamespace(
-                info={
-                    "name": "sshd",
-                    "username": owner,
-                    "cmdline": [title],
-                    "create_time": time.time() - 60,
-                },
-                exe=lambda: executable,
-            )
-
-        processes = [
-            process("sshd: claimed-user@pts/0"),
-            process("sshd: example-user@<img/src=x/onerror=alert(1)>"),
-            process("sshd: example-user@pts/0", executable="/usr/bin/python3"),
-            process("sshd: example-user@notty"),
-        ]
-        with (
-            patch.object(app.psutil, "process_iter", return_value=processes),
-            patch.object(
-                app.os, "stat", return_value=SimpleNamespace(st_uid=0, st_mode=0o100755)
-            ),
-        ):
-            connections = app.get_active_connections()
-        self.assertEqual(len(connections), 1)
-        self.assertEqual(connections[0]["user"], "example-user")
-        self.assertEqual(connections[0]["type"], "SSH (no TTY)")
-
-    def test_writable_or_user_owned_ssh_binary_is_rejected(self):
-        process = SimpleNamespace(
-            info={
-                "name": "sshd",
-                "username": "example-user",
-                "cmdline": ["sshd: example-user@pts/0"],
-                "create_time": time.time(),
-            },
-            exe=lambda: "/usr/sbin/sshd",
-        )
-        for uid, mode in ((1000, 0o100755), (0, 0o100777)):
-            with (
-                patch.object(app.psutil, "process_iter", return_value=[process]),
-                patch.object(
-                    app.os,
-                    "stat",
-                    return_value=SimpleNamespace(st_uid=uid, st_mode=mode),
-                ),
-            ):
-                self.assertEqual(app.get_active_connections(), [])
+    def test_failed_session_source_returns_503(self):
+        self.service.config["SHOW_SESSIONS"] = self.application.config[
+            "SHOW_SESSIONS"
+        ] = True
+        self.sessions.records.side_effect = RuntimeError("PRIVATE_TEST_MARKER")
+        self.ready()
+        response = self.client.get("/api/login_stats")
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn(b"PRIVATE_TEST_MARKER", response.data)
 
 
 class SettingsTests(unittest.TestCase):
@@ -401,6 +230,11 @@ class SettingsTests(unittest.TestCase):
             {"GPUROSTER_COMMAND_TIMEOUT": "31"},
             {"GPUROSTER_SHOW_COMMANDS": "maybe"},
             {"GPUROSTER_PORT": "0"},
+            {"GPUROSTER_COLLECT_INTERVAL": "nan"},
+            {"GPUROSTER_COLLECT_INTERVAL": "0"},
+            {"GPUROSTER_SESSION_INTERVAL": "0"},
+            {"GPUROSTER_GPU_BACKEND": "invalid"},
+            {"GPUROSTER_TIMEZONE": "invalid"},
         ):
             with self.subTest(environment=environment), self.assertRaises(ValueError):
                 load_settings(environment)

@@ -1,10 +1,61 @@
 import unittest
+import subprocess
+import sys
+import time
 from unittest.mock import Mock, patch
 
-from monitoring.collectors import CollectionError, NvidiaSMI, SystemCollector
+from monitoring.collectors import (
+    CollectionError,
+    CommandRunner,
+    NvidiaSMI,
+    SystemCollector,
+)
 
 
 class CollectorTests(unittest.TestCase):
+    def test_real_subprocess_timeout_is_bounded(self):
+        started = time.monotonic()
+        with self.assertRaisesRegex(CollectionError, "command_timeout"):
+            CommandRunner(0.05)([sys.executable, "-c", "import time; time.sleep(5)"])
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_command_errors_are_safe_and_distinct(self):
+        for error, code in [
+            (FileNotFoundError("PRIVATE"), "command_missing"),
+            (
+                subprocess.CalledProcessError(1, ["tool"], stderr="PRIVATE"),
+                "command_failed",
+            ),
+        ]:
+            with (
+                patch("monitoring.collectors.subprocess.run", side_effect=error),
+                self.assertRaisesRegex(CollectionError, code),
+            ):
+                CommandRunner()(["tool"])
+
+    def test_credentials_are_not_inherited_and_output_locale_is_fixed(self):
+        with (
+            patch.dict("os.environ", {"GPUROSTER_AUTH_PASSWORD": "TEST_ONLY"}),
+            patch(
+                "monitoring.collectors.subprocess.run", return_value=Mock(stdout="ok")
+            ) as run,
+        ):
+            self.assertEqual(CommandRunner()(["tool"]), "ok")
+        self.assertNotIn("GPUROSTER_AUTH_PASSWORD", run.call_args.kwargs["env"])
+        self.assertEqual(run.call_args.kwargs["env"]["TZ"], "UTC")
+        self.assertEqual(run.call_args.kwargs["env"]["LC_ALL"], "C")
+
+    def test_opt_in_process_arguments_are_truncated(self):
+        process = Mock()
+        process.username.return_value = "example-user"
+        process.cmdline.return_value = ["python", "x" * 200]
+        with patch("monitoring.collectors.psutil.Process", return_value=process):
+            rows = NvidiaSMI(Mock(return_value="123, GPU-example, 10"), True).processes(
+                ()
+            )
+        self.assertTrue(rows[0].command.startswith("python "))
+        self.assertEqual(len(rows[0].command), 121)
+
     def test_uuid_survives_index_changes_and_unsupported_values(self):
         runner = Mock(
             return_value='2, GPU-example, "Example, GPU", N/A, 10, 100, 40, N/A'
