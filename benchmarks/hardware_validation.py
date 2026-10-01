@@ -22,6 +22,20 @@ from gpuroster.monitoring.nvml import NVMLWorker
 
 METRICS = ("utilization", "memory_used", "memory_total", "temperature", "power")
 LATENCY_BOUNDS_MS = (1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 3000, 10000)
+ERROR_CODES = {
+    "command_timeout",
+    "command_missing",
+    "command_failed",
+    "invalid_output",
+    "nvml_unavailable",
+    "gpu_collection_failed",
+    "gpu_worker_failed",
+    "process_metrics_unavailable",
+    "gpu_sample_unavailable",
+    "worker_cleanup_failed",
+    "worker_exit_not_detected",
+    "invalid_sample",
+}
 
 
 def inventory(runner):
@@ -285,11 +299,14 @@ def main():
         report = run(
             args.duration, args.interval, args.sample_interval, args.recovery_cycles
         )
-    except Exception:
+    except Exception as error:
         # Driver and OS exceptions can contain real host/process identifiers.
-        print(
-            json.dumps({"checks_passed": False, "error": "hardware_validation_failed"})
+        code = (
+            error.code
+            if isinstance(error, CollectionError) and error.code in ERROR_CODES
+            else "hardware_validation_failed"
         )
+        print(json.dumps({"checks_passed": False, "error": code}))
         raise SystemExit(1) from None
     print(json.dumps(report, indent=2))
     raise SystemExit(0 if report["checks_passed"] else 1)

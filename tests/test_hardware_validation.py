@@ -111,6 +111,28 @@ class HardwareValidationTests(unittest.TestCase):
             json.loads(output.call_args.args[0])["error"], "hardware_validation_failed"
         )
 
+    def test_cli_exposes_only_allowlisted_error_codes(self):
+        for code, expected in (
+            ("command_missing", "command_missing"),
+            ("process_metrics_unavailable", "process_metrics_unavailable"),
+            ("PRIVATE_ERROR", "hardware_validation_failed"),
+        ):
+            with (
+                self.subTest(code=code),
+                patch("sys.argv", ["hardware_validation"]),
+                patch(
+                    "benchmarks.hardware_validation.run",
+                    side_effect=CollectionError(code),
+                ),
+                patch("builtins.print") as output,
+            ):
+                with self.assertRaises(SystemExit) as raised:
+                    main()
+                self.assertEqual(raised.exception.code, 1)
+                self.assertEqual(
+                    json.loads(output.call_args.args[0])["error"], expected
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

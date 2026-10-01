@@ -25,9 +25,16 @@ Unsupported metrics remain null and are counted, rather than replaced with zero.
 
 Driver version, device/MIG counts, null/unknown counts, timing histograms, and
 parent/worker resources are reported. Device UUIDs/names, process IDs, usernames,
-commands, addresses, and hostnames are never emitted. Failures use a fixed safe
-error instead of driver exception text. A failure exits nonzero. This report is
+commands, addresses, and hostnames are never emitted. Failures use allowlisted
+codes instead of driver exception text. A failure exits nonzero. This report is
 aggregate validation evidence, not a dump of the dashboard API.
+
+`command_missing` means the CLI tool is unavailable; `nvml_unavailable` means the
+native library could not initialize; `process_metrics_unavailable` means the
+process query failed (including unsupported access or permissions). A
+`command_timeout` or `gpu_worker_failed` means collection did not complete.
+Unexpected failures report only `hardware_validation_failed`. Inspect local
+driver/tool availability and account permissions; do not publish raw host logs.
 
 After measurement, the command closes its worker, then tests ten forced worker
 exits and subsequent recovery. It terminates only its own NVML child processes.
