@@ -1,6 +1,6 @@
 """Measure the real local demo and packaged assets; no host monitoring.
 
-Run: python -m benchmarks.dashboard [--screenshot docs/images/demo-dashboard.png]
+Run: python -m benchmarks.dashboard [--soak-seconds 300]
 Requires the development dependencies and Playwright Chromium.
 """
 
@@ -19,7 +19,7 @@ from gpuroster.server import HTTPServer
 from gpuroster.settings import load_settings
 
 
-def measure(screenshot=None):
+def measure(screenshot=None, soak_seconds=0, refresh_interval=0.5):
     application = create_app({**load_settings({}), "DEMO": True})
     collector = application.extensions["collector"]
     server = HTTPServer(application, "127.0.0.1", 0)
@@ -28,7 +28,8 @@ def measure(screenshot=None):
     collector.start()
     thread.start()
     url = f"http://127.0.0.1:{server.server.effective_port}"
-    external, errors, loads = [], [], []
+    external, errors, http_errors, loads = [], [], [], []
+    soak = None
 
     def local_only(route):
         if route.request.url.startswith(url + "/"):
@@ -44,6 +45,14 @@ def measure(screenshot=None):
                 context = browser.new_context(viewport={"width": 1440, "height": 1050})
                 page = context.new_page()
                 page.on("pageerror", lambda error: errors.append(str(error)))
+                page.on(
+                    "response",
+                    lambda response: (
+                        http_errors.append(response.status)
+                        if response.status >= 400
+                        else None
+                    ),
+                )
                 page.route("**/*", local_only)
                 started = time.perf_counter()
                 page.goto(url)
@@ -77,13 +86,60 @@ def measure(screenshot=None):
                         if update == 99:
                             after_100 = retained_heap()
                     after = retained_heap()
+                    if soak_seconds:
+                        soak_started = time.monotonic()
+                        next_sample = 30
+                        selected = "live"
+                        refreshes = 0
+                        samples = [{"seconds": 0, "retained_js_heap_bytes": int(after)}]
+                        while time.monotonic() - soak_started < soak_seconds:
+                            tick = time.monotonic()
+                            elapsed = tick - soak_started
+                            # Exercise chart reuse across live and historical views.
+                            period = ("live", "today", "week", "month")[
+                                int(elapsed // 30) % 4
+                            ]
+                            if period != selected:
+                                page.evaluate("setUtilRange", period)
+                                selected = period
+                            page.evaluate(
+                                "Promise.all([fetchStats(), utilRange === 'live' ? Promise.resolve() : fetchHistoryChart(utilRange)])"
+                            )
+                            refreshes += 1
+                            if elapsed >= next_sample:
+                                samples.append(
+                                    {
+                                        "seconds": round(elapsed, 3),
+                                        "retained_js_heap_bytes": int(retained_heap()),
+                                    }
+                                )
+                                next_sample += 30
+                            remaining = min(
+                                refresh_interval - (time.monotonic() - tick),
+                                soak_seconds - (time.monotonic() - soak_started),
+                            )
+                            if remaining > 0:
+                                page.wait_for_timeout(remaining * 1000)
+                        samples.append(
+                            {
+                                "seconds": round(time.monotonic() - soak_started, 3),
+                                "retained_js_heap_bytes": int(retained_heap()),
+                            }
+                        )
+                        soak = {
+                            "duration_s": round(time.monotonic() - soak_started, 3),
+                            "manual_refresh_interval_s": refresh_interval,
+                            "manual_refreshes": refreshes,
+                            "range_switch_interval_s": 30,
+                            "heap_samples": samples,
+                        }
                     assets = page.evaluate(
                         "performance.getEntriesByType('resource').filter(r => r.name.includes('/static/')).map(r => ({path: new URL(r.name).pathname, bytes: r.encodedBodySize}))"
                     )
                 context.close()
             browser.close()
-        assert not external and not errors, (
-            "Unexpected network requests or browser errors"
+        assert not external and not errors and not http_errors, (
+            "Unexpected network requests, HTTP errors, or browser errors"
         )
         return {
             "mode": "synthetic_demo",
@@ -100,7 +156,9 @@ def measure(screenshot=None):
             "retained_js_heap_after_bytes": int(after),
             "external_requests": len(external),
             "browser_errors": len(errors),
+            "http_errors": len(http_errors),
             "assets": assets,
+            **({"soak": soak} if soak else {}),
         }
     finally:
         stop.set()
@@ -112,7 +170,18 @@ def measure(screenshot=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--screenshot", type=Path)
+    parser.add_argument("--soak-seconds", type=float, default=0)
+    parser.add_argument("--refresh-interval", type=float, default=0.5)
     args = parser.parse_args()
+    if args.soak_seconds < 0 or args.refresh_interval <= 0:
+        parser.error("soak-seconds must be nonnegative and refresh-interval positive")
     print(
-        json.dumps(measure(str(args.screenshot) if args.screenshot else None), indent=2)
+        json.dumps(
+            measure(
+                str(args.screenshot) if args.screenshot else None,
+                args.soak_seconds,
+                args.refresh_interval,
+            ),
+            indent=2,
+        )
     )

@@ -1,0 +1,81 @@
+{
+  "mode": "synthetic_demo",
+  "loads_with_fresh_context": 5,
+  "ready_median_ms": 109.437,
+  "ready_max_ms": 414.257,
+  "updates": 1000,
+  "update_median_ms": 11.109,
+  "update_p95_ms": 16.78,
+  "retained_js_heap_before_bytes": 2948144,
+  "retained_js_heap_after_100_bytes": 3710780,
+  "retained_js_heap_after_bytes": 4266392,
+  "external_requests": 0,
+  "browser_errors": 0,
+  "http_errors": 0,
+  "assets": [
+    {
+      "path": "/static/dashboard.css",
+      "bytes": 10943
+    },
+    {
+      "path": "/static/dashboard.js",
+      "bytes": 17704
+    },
+    {
+      "path": "/static/vendor/chart.umd.js",
+      "bytes": 205325
+    }
+  ],
+  "soak": {
+    "duration_s": 300.024,
+    "manual_refresh_interval_s": 0.5,
+    "manual_refreshes": 599,
+    "range_switch_interval_s": 30,
+    "heap_samples": [
+      {
+        "seconds": 0,
+        "retained_js_heap_bytes": 4266392
+      },
+      {
+        "seconds": 30.062,
+        "retained_js_heap_bytes": 4253700
+      },
+      {
+        "seconds": 60.118,
+        "retained_js_heap_bytes": 4295892
+      },
+      {
+        "seconds": 90.176,
+        "retained_js_heap_bytes": 4234040
+      },
+      {
+        "seconds": 120.232,
+        "retained_js_heap_bytes": 4330056
+      },
+      {
+        "seconds": 150.294,
+        "retained_js_heap_bytes": 4342656
+      },
+      {
+        "seconds": 180.349,
+        "retained_js_heap_bytes": 4370212
+      },
+      {
+        "seconds": 210.409,
+        "retained_js_heap_bytes": 4269340
+      },
+      {
+        "seconds": 240.465,
+        "retained_js_heap_bytes": 4265516
+      },
+      {
+        "seconds": 270.02,
+        "retained_js_heap_bytes": 4317784
+      },
+      {
+        "seconds": 300.001,
+        "retained_js_heap_bytes": 4317480
+      }
+    ]
+  }
+}

@@ -66,6 +66,33 @@ query and did not improve; caching does not speed up an individual SQL scan.
 Results are one run per case, not confidence intervals or capacity guarantees.
 Raw output: [history-load-cached-2026-10-01.json](../../benchmarks/results/history-load-cached-2026-10-01.json).
 
-The improvement justifies the cache implementation. Acceptance still requires
-the longer mixed workload across successful writes; [ADR-006](../architecture/ADR-006-shared-history-queries.md)
-records its consistency and failure semantics.
+## Longer mixed workload
+
+`python -m benchmarks.history_load --clients 50 --duration 185 --stats-interval 1 --history-interval 5`
+ran against the same synthetic database and production HTTP adapter. Live
+polling was five times more frequent and history polling twelve times more
+frequent than the dashboard defaults. The result included 9,217 live and 1,850 historical
+responses, zero HTTP/validation failures, four successful writes (including
+startup), and zero write failures. Only six SQL queries served the historical
+requests. TTL expiry and write invalidation can occur separately, so the design
+does not guarantee exactly one query per write.
+
+Live median/p95 was 7.339/140.126 ms; history median/p95 was 52.851/495.966 ms.
+Maximum responses reached 1.68/1.63 seconds respectively. The collector completed
+736 cycles against roughly 740 scheduled opportunities: no multiplication with
+client count, but some deadlines were missed. Write median/max was
+6.404/152.134 ms. CPU was 56.879 seconds, including load generation.
+
+Combined server/load-generator RSS increased from 38,760,448 to 90,640,384 bytes;
+after 60 seconds it ranged from 79,196,160 to 90,640,384 bytes. The harness also
+retains latency measurements. This run does not demonstrate a memory plateau
+or isolate server memory from clients/allocators. A separate-process, longer
+resource profile is future work. Small development checks also ran on this host
+during this soak; it is a functional endurance check, not an isolated latency
+comparison.
+
+Raw output: [history-load-soak-2026-10-01.json](../../benchmarks/results/history-load-soak-2026-10-01.json).
+The comparison and successful writes under sustained traffic justify accepting
+the cache; [ADR-006](../architecture/ADR-006-shared-history-queries.md) records its
+consistency and failure semantics. Cold-query latency remains visible, and no
+production capacity or leak-free guarantee is inferred.

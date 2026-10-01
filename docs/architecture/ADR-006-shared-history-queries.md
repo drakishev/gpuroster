@@ -1,6 +1,6 @@
 # ADR-006: Share bounded historical query results
 
-Status: under validation, 2026-10-01.
+Status: accepted for Phase 5, 2026-10-01.
 
 ## Context and evidence
 
@@ -32,7 +32,7 @@ Do not add schema migrations or make hardware collection wait for query locks.
   SQLite documents [connection isolation and journal behavior](https://www.sqlite.org/isolation.html).
   Keep the existing journal mode for this experiment.
 
-## Decision under test
+## Decision
 
 Create one `HistoryQueryCache` per Flask application with the configured timezone
 and exactly three range locks. Requests for the same range share a completed
@@ -76,3 +76,12 @@ Cold queries, simultaneous misses for different ranges, and unusually large or
 slow databases can still delay HTTP workers. This cache does not impose a SQL
 execution deadline. The 60-second setting limits reuse, not total query execution
 time. Longer retention and multiple web processes need separate measurements.
+
+The identical 50-client short workload reduced live/history p95 to 358/519 ms
+and SQL queries from 100 to one. A 185-second mixed run completed 11,067 HTTP
+requests with zero failures and four successful writes; six queries served
+1,850 history requests. Some collection deadlines were missed, and combined
+server/load-generator RSS grew during the run. These measurements support
+removing duplicate SQL work, without establishing a capacity or memory plateau.
+Tests cover concurrency, invalidation, clock/DST boundaries, failures, mutation
+isolation, and current health on cached responses.

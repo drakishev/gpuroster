@@ -112,7 +112,7 @@ Backend tests alone need only the runtime dependencies:
 venv/bin/python -m unittest discover -s tests -v
 ```
 
-[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, builds a wheel from the source distribution, tests a clean installation outside the checkout, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 4 validation](docs/validation/phase-four.md), and [contribution guidelines](CONTRIBUTING.md).
+[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, builds a wheel from the source distribution, tests a clean installation outside the checkout, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 5 validation](docs/validation/phase-five.md), and [contribution guidelines](CONTRIBUTING.md).
 
 ## Architecture
 
@@ -128,7 +128,7 @@ flowchart LR
     API --> Clients["Many browser clients"]
 ```
 
-The collector runs in one thread in the web process. NVML calls run in one persistent child process so a stalled driver call can time out and the worker can be restarted. CLI collection remains available. API requests copy published snapshots; they never poll hardware. Historical requests share SQLite results per range, refreshing after successful writes and at most 60 seconds after a query began. Responses expose query time/age separately from current writer health. See [ADR-006](docs/architecture/ADR-006-shared-history-queries.md).
+The collector runs in one thread in the web process. NVML calls run in one persistent child process so a stalled driver call can time out and the worker can be restarted. CLI collection remains available. API requests copy published snapshots; they never poll hardware. Historical requests share SQLite results per range for less than 60 seconds from query start; a successful write invalidates prior results. Responses expose query time/age separately from current writer health. See [ADR-006](docs/architecture/ADR-006-shared-history-queries.md).
 
 Collection attempts use a monotonic schedule and skip missed intervals rather than accumulating work. Snapshots carry a sequence number, UTC collection timestamp, backend name, and source ages. An HTTP response does not make an old measurement fresh. The first CPU interval is unknown until the collector has a baseline.
 
