@@ -154,6 +154,9 @@ class SystemCollector:
     def __init__(self):
         self.last_sample = None
 
+    def reset(self):
+        self.last_sample = None
+
     def collect(self):
         now = time.monotonic()
         measured = psutil.cpu_percent(interval=None)

@@ -199,6 +199,8 @@ class CollectorService:
         return data
 
     def _run(self):
+        if isinstance(self.system, SystemCollector):
+            self.system.reset()
         deadline = time.monotonic()
         try:
             while not self._stop.is_set():

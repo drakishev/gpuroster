@@ -111,6 +111,20 @@ class CollectorTests(unittest.TestCase):
             self.assertEqual(collector.collect().cpu_percent, 25)
             self.assertIsNone(collector.collect().cpu_percent)
 
+    def test_cpu_reset_requires_a_new_baseline_after_collector_restart(self):
+        collector = SystemCollector()
+        collector.last_sample = 1
+        collector.reset()
+        with (
+            patch("monitoring.collectors.time.monotonic", return_value=5),
+            patch("monitoring.collectors.psutil.cpu_percent", return_value=0),
+            patch(
+                "monitoring.collectors.psutil.virtual_memory",
+                return_value=Mock(used=10, total=100, percent=10),
+            ),
+        ):
+            self.assertIsNone(collector.collect().cpu_percent)
+
 
 if __name__ == "__main__":
     unittest.main()
