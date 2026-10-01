@@ -22,12 +22,13 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements*.txt
+          cache-dependency-path: requirements/*.lock
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
-      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements/build.lock -r requirements/dev.lock
       - run: python -m pip check
+      - run: python scripts/lock_dependencies.py --check
       - run: ruff check .
       - run: ruff format --check .
       - run: node --check gpuroster/static/dashboard.js
@@ -55,8 +56,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: requirements.txt
-      - run: python -m pip install -r requirements.txt
+          cache-dependency-path: requirements/runtime.lock
+      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements/runtime.lock
       - run: python -m pip check
       - run: python -m unittest discover -s tests -v
 
@@ -69,8 +70,8 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements*.txt
-      - run: python -m pip install -r requirements-dev.txt
+          cache-dependency-path: requirements/dev.lock
+      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements/dev.lock
       - run: python -m playwright install --with-deps chromium
       - run: python -m unittest discover -s tests/browser -v
 
@@ -82,8 +83,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - run: python -m pip install pip-audit==2.10.1
-      - run: pip-audit -r requirements.txt
+      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements/audit.lock
+      - run: pip-audit --require-hashes -r requirements/runtime.lock
 
   packaging:
     runs-on: ubuntu-latest
@@ -97,14 +98,30 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install build==1.6.1
-      - run: python -m build
+      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements/build.lock
+      - run: python -m build --no-isolation
       - name: Install wheel in an isolated environment
         run: |
           python -m venv "$RUNNER_TEMP/gpuroster-install"
-          "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip install --require-hashes --only-binary=:all: -r requirements/runtime.lock
+          "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip install --no-deps dist/*.whl
           "$RUNNER_TEMP/gpuroster-install/bin/python" -m pip check
       - name: Test installed launcher outside checkout without GPU tools
         run: python scripts/smoke_install.py "$RUNNER_TEMP/gpuroster-install/bin/gpuroster"
       - name: Test installed synthetic demo without host monitoring or persistent state
         run: python scripts/smoke_install.py "$RUNNER_TEMP/gpuroster-install/bin/gpuroster" --demo
+
+  compatibility:
+    name: Latest compatible runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Deliberately exercise the published compatibility ranges, separately
+      # from the locked environments used for deployment and artifact builds.
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - run: python -m unittest discover -s tests -v
