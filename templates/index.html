@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPU Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .card { background: #1a1d2e; border: 1px solid #2d3155; border-radius: 12px; }
+    .gpu-card { transition: transform 0.15s, box-shadow 0.15s; }
+    .gpu-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(99,102,241,0.18); }
+    .bar-bg { background: #2d3155; border-radius: 99px; height: 8px; overflow: hidden; }
+    .bar-fill { border-radius: 99px; height: 8px; transition: width 0.6s ease; }
+    .util-low  { background: linear-gradient(90deg, #10b981, #34d399); }
+    .util-mid  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .util-high { background: linear-gradient(90deg, #ef4444, #f97316); }
+    .mem-fill  { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+    .badge     { border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
+    .badge-active { background: #065f46; color: #34d399; }
+    .badge-idle   { background: #1e1b4b; color: #818cf8; }
+    .badge-hot    { background: #7f1d1d; color: #fca5a5; }
+    .badge-live   { background: #14532d; color: #4ade80; }
+    .pill { border-radius: 99px; padding: 1px 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; }
+    .pill-user { background: #312e81; color: #a5b4fc; cursor: pointer; }
+    .pill-user:hover { background: #4338ca; }
+    .pill-user.active-filter { background: #4f46e5; outline: 2px solid #818cf8; }
+    .section-title { font-size: 0.7rem; letter-spacing: 0.12em; font-weight: 700; color: #6366f1; text-transform: uppercase; margin-bottom: 12px; }
+    table { border-collapse: separate; border-spacing: 0; }
+    th { font-size: 0.68rem; letter-spacing: 0.08em; font-weight: 700; color: #6366f1; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid #2d3155; }
+    td { padding: 8px 12px; font-size: 0.81rem; border-bottom: 1px solid #1e2138; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1e2138; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .dot-gray  { background: #4b5563; }
+    .pulse { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .stat-number { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+    .chart-wrap { position: relative; height: 220px; }
+    .session-row-live td { background: rgba(16,185,129,0.05); }
+    .session-row-live:hover td { background: rgba(16,185,129,0.1) !important; }
+    .hidden-row { display: none; }
+  </style>
+</head>
+<body class="min-h-screen p-4 lg:p-6">
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-black tracking-tight">GPU Monitor</h1>
+    <p class="text-slate-400 text-sm mt-0.5">NVIDIA H200 · Real-time dashboard</p>
+  </div>
+  <div class="flex items-center gap-4 text-sm text-slate-400">
+    <span class="text-xs"><span class="dot dot-green pulse mr-1"></span>LIVE</span>
+    <span id="last-update">–</span>
+  </div>
+</div>
+
+<!-- System Stats Row -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  <div class="card p-4"><div class="section-title">CPU</div><div class="stat-number" id="sys-cpu">–</div></div>
+  <div class="card p-4"><div class="section-title">RAM</div><div class="stat-number" id="sys-ram">–</div></div>
+  <div class="card p-4"><div class="section-title">Active GPUs</div><div class="stat-number" id="sys-active-gpus">–</div></div>
+  <div class="card p-4"><div class="section-title">GPU Processes</div><div class="stat-number" id="sys-procs">–</div></div>
+</div>
+
+<!-- Active Connections -->
+<div class="card p-5 mb-6">
+  <div class="flex items-center gap-3 mb-3">
+    <div class="section-title" style="margin-bottom:0">Active Connections</div>
+    <span class="text-xs text-slate-500">(SSH + VSCode — VSCode SSH is invisible to <code class="text-slate-400">last</code>/<code class="text-slate-400">who</code>)</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr>
+          <th class="text-left">User</th>
+          <th class="text-left">Type</th>
+          <th class="text-left">Connected Since</th>
+          <th class="text-right">Duration</th>
+          <th class="text-left">Terminal</th>
+        </tr>
+      </thead>
+      <tbody id="conn-tbody">
+        <tr><td colspan="5" class="text-center text-slate-500 py-4">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- GPU Cards Grid -->
+<div class="section-title">GPU Overview</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6" id="gpu-grid"></div>
+
+<!-- GPU Utilization History Chart -->
+<div class="card p-5 mb-6">
+  <div class="flex items-center justify-between mb-4">
+    <div class="section-title" style="margin-bottom:0" id="util-chart-title">GPU Utilization</div>
+    <div class="flex gap-2">
+      <button onclick="setUtilRange('live')"  id="btn-util-live"
+        class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 bg-indigo-900 text-indigo-200">Live</button>
+      <button onclick="setUtilRange('today')" id="btn-util-today"
+        class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 text-indigo-400 hover:bg-indigo-900 transition-colors">Today</button>
+      <button onclick="setUtilRange('week')"  id="btn-util-week"
+        class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 text-indigo-400 hover:bg-indigo-900 transition-colors">Week</button>
+      <button onclick="setUtilRange('month')" id="btn-util-month"
+        class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 text-indigo-400 hover:bg-indigo-900 transition-colors">Month</button>
+    </div>
+  </div>
+  <div class="chart-wrap"><canvas id="util-chart"></canvas></div>
+  <div class="mt-2 text-xs text-slate-500" id="util-chart-note"></div>
+</div>
+
+<!-- Two-column: Active Processes + User GPU Summary -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+  <div class="card p-5">
+    <div class="section-title">Active GPU Processes</div>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="text-left">User</th>
+            <th class="text-left">GPU</th>
+            <th class="text-right">VRAM</th>
+            <th class="text-left">Command</th>
+          </tr>
+        </thead>
+        <tbody id="proc-tbody">
+          <tr><td colspan="4" class="text-center text-slate-500 py-6">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <div class="section-title">Who's Using GPUs Right Now</div>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="text-left">User</th>
+            <th class="text-left">GPUs</th>
+            <th class="text-right">VRAM</th>
+            <th class="text-right">Procs</th>
+            <th class="text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody id="user-gpu-tbody">
+          <tr><td colspan="5" class="text-center text-slate-500 py-6">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Login / Usage Stats -->
+<div class="card p-5 mb-6">
+  <div class="flex items-center justify-between mb-4">
+    <div class="section-title" style="margin-bottom:0">Login Time per User</div>
+    <div class="flex gap-2">
+      <button onclick="setLoginPeriod('today')" id="btn-today"
+        class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 text-indigo-400 hover:bg-indigo-900 transition-colors">Today</button>
+      <button onclick="setLoginPeriod('week')" id="btn-week"
+        class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 bg-indigo-900 text-indigo-200">Week</button>
+      <button onclick="setLoginPeriod('month')" id="btn-month"
+        class="px-3 py-1 rounded text-xs font-bold border border-indigo-600 text-indigo-400 hover:bg-indigo-900 transition-colors">Month</button>
+    </div>
+  </div>
+  <div id="login-bars" class="space-y-3">
+    <div class="text-slate-500 text-sm text-center py-6">Loading…</div>
+  </div>
+</div>
+
+<!-- Login Hours Chart -->
+<div class="card p-5 mb-6">
+  <div class="section-title">Login Hours — All Users</div>
+  <div class="chart-wrap"><canvas id="login-chart"></canvas></div>
+</div>
+
+<!-- Session History Table -->
+<div class="card p-5 mb-6">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <div class="section-title" style="margin-bottom:0">Session History</div>
+    <div class="flex flex-wrap gap-2 ml-2" id="session-filter-pills">
+      <span class="pill pill-user active-filter" data-user="all" onclick="filterSessions('all')">All</span>
+    </div>
+    <div class="ml-auto flex gap-2">
+      <button onclick="toggleShortSessions()" id="btn-short"
+        class="px-3 py-1 rounded text-xs font-bold border border-slate-600 text-slate-400 hover:bg-slate-800 transition-colors">
+        Hide &lt;1 min
+      </button>
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full" id="session-table">
+      <thead>
+        <tr>
+          <th class="text-left">User</th>
+          <th class="text-left">Login</th>
+          <th class="text-left">Logout</th>
+          <th class="text-right">Duration</th>
+          <th class="text-left">Terminal</th>
+          <th class="text-left">Host / IP</th>
+        </tr>
+      </thead>
+      <tbody id="session-tbody">
+        <tr><td colspan="6" class="text-center text-slate-500 py-6">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-3 text-xs text-slate-500" id="session-count"></div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// Chart.js setup
+// ──────────────────────────────────────────────────────────────
+const GPU_COLORS = [
+  '#6366f1','#8b5cf6','#ec4899','#f43f5e',
+  '#f97316','#eab308','#10b981','#06b6d4'
+];
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#1e2138';
+
+const utilChart = new Chart(document.getElementById('util-chart').getContext('2d'), {
+  type: 'line',
+  data: { labels: [], datasets: [] },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { boxWidth: 12, padding: 14, font: { size: 11 } } },
+      tooltip: { callbacks: { label: c => ` GPU ${c.dataset.label}: ${c.parsed.y}%` } }
+    },
+    scales: {
+      x: { grid: { color: '#1e2138' }, ticks: { maxTicksLimit: 12, font: { size: 10 } } },
+      y: { min: 0, max: 100, grid: { color: '#1e2138' }, ticks: { callback: v => v + '%' } }
+    }
+  }
+});
+
+const loginChart = new Chart(document.getElementById('login-chart').getContext('2d'), {
+  type: 'bar',
+  data: { labels: [], datasets: [] },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: { callbacks: { label: c => ` ${c.parsed.y.toFixed(1)} h` } }
+    },
+    scales: {
+      x: { grid: { color: '#1e2138' } },
+      y: { grid: { color: '#1e2138' }, ticks: { callback: v => v + ' h' } }
+    }
+  }
+});
+
+// ──────────────────────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────────────────────
+let loginPeriod = 'week';
+let loginData = {};
+let allSessions = [];
+let sessionUserFilter = 'all';
+let hideShortSessions = false;
+
+const ALL_USERS = ['user0','user1','user2','user3','user4','user5','user6','user7'];
+const USER_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f43f5e','#f97316','#eab308','#10b981','#06b6d4'];
+
+// ──────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────
+function utilColor(u) {
+  if (u >= 80) return 'util-high';
+  if (u >= 30) return 'util-mid';
+  return 'util-low';
+}
+function fmtGB(mb) {
+  return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb + ' MB';
+}
+function fmtDuration(min) {
+  if (min < 1) return '<1 min';
+  if (min < 60) return Math.round(min) + ' min';
+  const h = Math.floor(min / 60), m = Math.round(min % 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function tempBadge(t) {
+  if (t >= 70) return `<span class="badge badge-hot">${t}°C</span>`;
+  return `<span style="color:#94a3b8;font-size:0.8rem">${t}°C</span>`;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Active Connections
+// ──────────────────────────────────────────────────────────────
+function renderConnections(conns) {
+  const tbody = document.getElementById('conn-tbody');
+  if (!conns.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-500 py-4">No active connections</td></tr>';
+    return;
+  }
+  tbody.innerHTML = conns.map(c => {
+    const isVS = c.type === 'VSCode';
+    const typeLabel = isVS
+      ? `<span class="badge" style="background:#1e3a5f;color:#60a5fa">VSCode</span>`
+      : `<span class="badge badge-idle">SSH</span>`;
+    const userColor = USER_COLORS[ALL_USERS.indexOf(c.user) % USER_COLORS.length] || '#6366f1';
+    return `<tr>
+      <td><span class="pill" style="background:${userColor}22;color:${userColor}">${c.user}</span></td>
+      <td>${typeLabel}</td>
+      <td class="font-mono text-xs text-slate-300">${c.since}</td>
+      <td class="text-right font-mono text-xs text-slate-300">${fmtDuration(c.duration_min)}</td>
+      <td class="font-mono text-xs text-slate-500">${c.tty}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────
+// GPU Grid
+// ──────────────────────────────────────────────────────────────
+function renderGPUGrid(gpus) {
+  document.getElementById('gpu-grid').innerHTML = gpus.map(g => {
+    const utilPct = g.utilization;
+    const memPct = Math.round(g.memory_used / g.memory_total * 100);
+    const uc = utilColor(utilPct);
+    const users = [...new Set(g.processes.map(p => p.user))];
+    const isActive = utilPct > 5;
+    return `
+    <div class="card gpu-card p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <span class="text-xs font-bold text-slate-400">GPU ${g.index}</span>
+          <div class="text-sm font-semibold text-white">${g.name}</div>
+        </div>
+        <span class="badge ${isActive ? 'badge-active' : 'badge-idle'}">${isActive ? 'ACTIVE' : 'IDLE'}</span>
+      </div>
+      <div class="mb-3">
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span>Utilization</span><span class="font-bold text-white">${utilPct}%</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill ${uc}" style="width:${utilPct}%"></div></div>
+      </div>
+      <div class="mb-3">
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span>VRAM</span>
+          <span class="font-bold text-white">${fmtGB(g.memory_used)} / ${fmtGB(g.memory_total)}</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill mem-fill" style="width:${memPct}%"></div></div>
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        ${tempBadge(g.temperature)}
+        <span class="text-slate-500">${g.power !== 'N/A' ? parseFloat(g.power).toFixed(0) + ' W' : ''}</span>
+      </div>
+      ${users.length ? `<div class="mt-2 flex flex-wrap gap-1">${users.map(u=>`<span class="pill pill-user">${u}</span>`).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────
+// Process Table
+// ──────────────────────────────────────────────────────────────
+function renderProcTable(procs) {
+  const tbody = document.getElementById('proc-tbody');
+  if (!procs.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-slate-500 py-6">No GPU processes</td></tr>';
+    return;
+  }
+  tbody.innerHTML = procs.map(p => `
+    <tr>
+      <td><span class="pill pill-user">${p.user}</span></td>
+      <td><span class="font-mono text-indigo-300">GPU ${p.gpu}</span></td>
+      <td class="text-right font-mono text-purple-300 whitespace-nowrap">${fmtGB(p.mem_mb)}</td>
+      <td class="text-slate-400 font-mono text-xs max-w-xs truncate">${escHtml(p.command)}</td>
+    </tr>`).join('');
+}
+
+// ──────────────────────────────────────────────────────────────
+// User GPU Summary
+// ──────────────────────────────────────────────────────────────
+function renderUserGPUTable(userGpu) {
+  const tbody = document.getElementById('user-gpu-tbody');
+  tbody.innerHTML = ALL_USERS.map(u => {
+    const info = userGpu[u];
+    if (!info) return `
+      <tr>
+        <td><span class="pill pill-user">${u}</span></td>
+        <td colspan="3" class="text-slate-600 text-xs">—</td>
+        <td class="text-center"><span class="dot dot-gray"></span></td>
+      </tr>`;
+    const gpuList = info.gpu_indices.map(i => `<span class="font-mono text-indigo-300 text-xs">${i}</span>`).join(' ');
+    return `
+      <tr>
+        <td><span class="pill pill-user">${u}</span></td>
+        <td>${gpuList}</td>
+        <td class="text-right font-mono text-purple-300 whitespace-nowrap">${info.mem_gb} GB</td>
+        <td class="text-right text-slate-300">${info.proc_count}</td>
+        <td class="text-center"><span class="dot dot-green pulse"></span></td>
+      </tr>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────
+// Login Bars
+// ──────────────────────────────────────────────────────────────
+function setLoginPeriod(p) {
+  loginPeriod = p;
+  ['today','week','month'].forEach(x => {
+    const btn = document.getElementById('btn-' + x);
+    btn.classList.toggle('bg-indigo-900', x === p);
+    btn.classList.toggle('text-indigo-200', x === p);
+    btn.classList.toggle('text-indigo-400', x !== p);
+  });
+  if (Object.keys(loginData).length) renderLoginBars(loginData);
+}
+
+function renderLoginBars(data) {
+  const key = loginPeriod + '_h';
+  const maxVal = Math.max(...ALL_USERS.map(u => data[u] ? data[u][key] || 0 : 0), 1);
+  document.getElementById('login-bars').innerHTML = ALL_USERS.map((u, i) => {
+    const d = data[u];
+    const h = d ? (d[key] || 0) : 0;
+    const pct = Math.round(h / maxVal * 100);
+    const lastSeen = d && d.last_seen ? new Date(d.last_seen).toLocaleString() : 'Never';
+    return `
+    <div class="flex items-center gap-3">
+      <div class="w-16 text-right"><span class="pill pill-user text-xs">${u}</span></div>
+      <div class="flex-1 bar-bg" style="height:18px;border-radius:4px;">
+        <div style="width:${pct}%;height:18px;border-radius:4px;background:${USER_COLORS[i]};transition:width 0.6s;"></div>
+      </div>
+      <div class="w-20 text-right text-xs font-mono text-slate-300">${h.toFixed(1)} h</div>
+      <div class="w-40 text-xs text-slate-500 hidden lg:block">${lastSeen}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderLoginChart(data) {
+  loginChart.data.labels = ALL_USERS;
+  loginChart.data.datasets = [
+    { label: 'Today',      data: ALL_USERS.map(u => data[u] ? data[u].today_h : 0), backgroundColor: 'rgba(99,102,241,0.75)', borderRadius: 4 },
+    { label: 'This Week',  data: ALL_USERS.map(u => data[u] ? data[u].week_h  : 0), backgroundColor: 'rgba(139,92,246,0.5)',  borderRadius: 4 },
+    { label: 'This Month', data: ALL_USERS.map(u => data[u] ? data[u].month_h : 0), backgroundColor: 'rgba(236,72,153,0.35)', borderRadius: 4 },
+  ];
+  loginChart.update();
+}
+
+// ──────────────────────────────────────────────────────────────
+// Session Table
+// ──────────────────────────────────────────────────────────────
+function buildSessionFilterPills(sessions) {
+  const users = [...new Set(sessions.map(s => s.user))].sort();
+  const container = document.getElementById('session-filter-pills');
+  container.innerHTML = `<span class="pill pill-user ${sessionUserFilter === 'all' ? 'active-filter' : ''}" data-user="all" onclick="filterSessions('all')">All</span>` +
+    users.map(u => `<span class="pill pill-user ${sessionUserFilter === u ? 'active-filter' : ''}" data-user="${u}" onclick="filterSessions('${u}')">${u}</span>`).join('');
+}
+
+function filterSessions(user) {
+  sessionUserFilter = user;
+  document.querySelectorAll('#session-filter-pills .pill-user').forEach(el => {
+    el.classList.toggle('active-filter', el.dataset.user === user);
+  });
+  applySessionFilters();
+}
+
+function toggleShortSessions() {
+  hideShortSessions = !hideShortSessions;
+  const btn = document.getElementById('btn-short');
+  btn.classList.toggle('bg-slate-700', hideShortSessions);
+  btn.classList.toggle('text-white', hideShortSessions);
+  applySessionFilters();
+}
+
+function applySessionFilters() {
+  const rows = document.querySelectorAll('#session-tbody tr[data-user]');
+  let visible = 0;
+  rows.forEach(row => {
+    const userMatch = sessionUserFilter === 'all' || row.dataset.user === sessionUserFilter;
+    const durMin = parseFloat(row.dataset.dur);
+    const durMatch = !hideShortSessions || durMin >= 1;
+    const show = userMatch && durMatch;
+    row.classList.toggle('hidden-row', !show);
+    if (show) visible++;
+  });
+  document.getElementById('session-count').textContent = `Showing ${visible} sessions`;
+}
+
+function renderSessionTable(sessions) {
+  allSessions = sessions;
+  buildSessionFilterPills(sessions);
+
+  const tbody = document.getElementById('session-tbody');
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-500 py-6">No sessions found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sessions.map(s => {
+    const isLive = s.still_in;
+    const isVS = s.source === 'vscode';
+    const userColor = USER_COLORS[ALL_USERS.indexOf(s.user) % USER_COLORS.length] || '#6366f1';
+    const durMin = s.duration_min;
+    const hostCell = isVS
+      ? `<span class="badge" style="background:#1e3a5f;color:#60a5fa;font-size:0.65rem">VSCode SSH</span>`
+      : `<span class="font-mono text-xs text-slate-500">${escHtml(s.host)}</span>`;
+    return `
+    <tr data-user="${s.user}" data-dur="${durMin}" class="${isLive ? 'session-row-live' : ''}">
+      <td><span class="pill" style="background:${userColor}22;color:${userColor}">${s.user}</span></td>
+      <td class="font-mono text-xs text-slate-300 whitespace-nowrap">${s.login}</td>
+      <td class="font-mono text-xs whitespace-nowrap">
+        ${isLive
+          ? `<span class="badge badge-live pulse">active</span>`
+          : `<span class="text-slate-400">${s.logout}</span>`}
+      </td>
+      <td class="text-right font-mono text-xs whitespace-nowrap ${durMin < 1 ? 'text-slate-600' : 'text-slate-300'}">${fmtDuration(durMin)}</td>
+      <td class="font-mono text-xs text-slate-500">${escHtml(s.terminal)}</td>
+      <td>${hostCell}</td>
+    </tr>`;
+  }).join('');
+
+  applySessionFilters();
+}
+
+// ──────────────────────────────────────────────────────────────
+// GPU Utilization Chart — Live / Today / Week / Month
+// ──────────────────────────────────────────────────────────────
+let utilRange = 'live';
+
+function setUtilRange(range) {
+  utilRange = range;
+  ['live','today','week','month'].forEach(r => {
+    const btn = document.getElementById('btn-util-' + r);
+    btn.classList.toggle('bg-indigo-900', r === range);
+    btn.classList.toggle('text-indigo-200', r === range);
+    btn.classList.toggle('text-indigo-400', r !== range);
+  });
+  if (range === 'live') {
+    // Immediately render from cached live data
+    if (window._lastHistory) renderLiveChart(window._lastHistory);
+  } else {
+    fetchHistoryChart(range);
+  }
+}
+
+function _applyChartData(labels, datasets) {
+  // Rebuild datasets only when GPU count changes
+  if (utilChart.data.datasets.length !== datasets.length) {
+    utilChart.data.datasets = datasets.map((d, i) => ({
+      label: 'GPU ' + (d.gpu ?? i),
+      data: [],
+      borderColor: GPU_COLORS[(d.gpu ?? i) % GPU_COLORS.length],
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.4,
+    }));
+  }
+  utilChart.data.labels = labels;
+  datasets.forEach((d, i) => { utilChart.data.datasets[i].data = d.data; });
+  utilChart.update('none');
+}
+
+function renderLiveChart(history) {
+  const allTs = new Set();
+  Object.values(history).forEach(arr => arr.forEach(pt => allTs.add(pt.ts)));
+  const labels = [...allTs].sort();
+  const datasets = Object.keys(history).sort((a,b) => +a - +b).map(idx => {
+    const map = {};
+    history[idx].forEach(pt => { map[pt.ts] = pt.util; });
+    return { gpu: +idx, data: labels.map(l => map[l] ?? null) };
+  });
+  _applyChartData(labels, datasets);
+
+  const titles = { live: 'Last 6 Minutes (EMA smoothed)', today: 'Today', week: 'This Week', month: 'This Month' };
+  document.getElementById('util-chart-title').textContent = 'GPU Utilization — ' + titles[utilRange];
+  document.getElementById('util-chart-note').textContent = '';
+}
+
+async function fetchHistoryChart(range) {
+  try {
+    const d = await fetch('/api/gpu_history?range=' + range).then(r => r.json());
+    _applyChartData(d.labels, d.datasets);
+    const titles = { today: 'Today (5-min avg)', week: 'This Week (hourly avg)', month: 'This Month (6-hour avg)' };
+    document.getElementById('util-chart-title').textContent = 'GPU Utilization — ' + (titles[range] || range);
+    const note = d.points === 0
+      ? 'No data yet — history builds up as the server runs.'
+      : `${d.points} data points`;
+    document.getElementById('util-chart-note').textContent = note;
+  } catch(e) { console.error('history chart error', e); }
+}
+
+function updateHistoryChart(history) {
+  window._lastHistory = history;
+  if (utilRange === 'live') renderLiveChart(history);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Fetch loop
+// ──────────────────────────────────────────────────────────────
+async function fetchStats() {
+  try {
+    const d = await fetch('/api/stats').then(r => r.json());
+    document.getElementById('last-update').textContent = new Date(d.timestamp).toLocaleTimeString();
+    document.getElementById('sys-cpu').textContent = d.system.cpu_percent + '%';
+    document.getElementById('sys-ram').textContent = d.system.ram_used_gb + ' / ' + d.system.ram_total_gb + ' GB';
+    document.getElementById('sys-active-gpus').textContent = d.gpus.filter(g => g.utilization > 5).length + ' / ' + d.gpus.length;
+    document.getElementById('sys-procs').textContent = d.processes.length;
+    renderGPUGrid(d.gpus);
+    renderProcTable(d.processes);
+    renderUserGPUTable(d.user_gpu);
+    updateHistoryChart(d.history);
+    if (d.connections) renderConnections(d.connections);
+  } catch(e) { console.error('stats error', e); }
+}
+
+async function fetchLoginStats() {
+  try {
+    loginData = await fetch('/api/login_stats').then(r => r.json());
+    renderLoginBars(loginData);
+    renderLoginChart(loginData);
+  } catch(e) { console.error('login stats error', e); }
+}
+
+async function fetchSessions() {
+  try {
+    const sessions = await fetch('/api/sessions').then(r => r.json());
+    renderSessionTable(sessions);
+  } catch(e) { console.error('sessions error', e); }
+}
+
+fetchStats();
+fetchLoginStats();
+fetchSessions();
+setInterval(fetchStats, 5000);
+setInterval(fetchLoginStats, 60000);
+setInterval(fetchSessions, 60000);
+</script>
+</body>
+</html>
