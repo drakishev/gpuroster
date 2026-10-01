@@ -1,0 +1,9 @@
+{
+  "gpus": 8,
+  "samples": 100,
+  "cold_start_ms": 475.298,
+  "worker_cpu_ms_per_sample": 0.7,
+  "worker_rss_kib": 56084,
+  "median_ms": 0.662,
+  "p95_ms": 0.923
+}

@@ -1,6 +1,6 @@
 # GPU collection experiment
 
-Date: 2026-10-01. Status: measured; worker isolation is being validated before integration.
+Date: 2026-10-01. Status: measured; worker isolation validated and selected in [ADR-002](../architecture/ADR-002-shared-collection.md).
 
 Hypothesis: NVML can materially reduce collection latency and CPU overhead while preserving the requested GPU identity, utilization, memory, temperature, power, and compute-process information.
 
@@ -16,6 +16,6 @@ Run `python benchmarks/gpu_backends.py` in an isolated environment containing `n
 
 NVML initialization took 92–119 ms. Peak parent RSS was about 37 MiB with NVML versus 15 MiB for the CLI harness, whose child peak RSS was about 22–23 MiB. Peak RSS includes imports/initialization and is not incremental application memory. CPU includes CLI child user/system time and excludes NVML initialization/shutdown. Fixed-order, rapidly repeated samples can favor warm driver caches; these numbers are observational rather than a production capacity promise. No queried fields were unsupported during these runs. Process identities and commands were never emitted.
 
-The latency hypothesis is supported. An in-process NVML call cannot be interrupted with the existing subprocess deadline, so the next prototype puts it in a persistent worker process with bounded parent waits, termination, and restart. Keep the CLI collector as a fallback when NVML cannot initialize. A runtime driver failure should remain visible rather than silently changing backends.
+The latency hypothesis is supported. An in-process NVML call cannot be interrupted with the existing subprocess deadline, so the selected implementation puts it in a persistent worker process with bounded parent waits, termination, and restart. The worker measured 0.662 ms median / 0.923 ms p95 over 100 warm eight-GPU samples, including IPC; cold startup was 475.298 ms. Synthetic tests verify worker termination and restart. The CLI collector remains a fallback when NVML cannot initialize. Runtime driver failures remain visible rather than silently changing backends. See the complete [benchmark record](../benchmarks.md).
 
 References: [NVIDIA NVML API](https://docs.nvidia.com/deploy/nvml-api/nvml-api-reference.html), [NVIDIA CLI compatibility and identity guidance](https://docs.nvidia.com/deploy/nvidia-smi/index.html), [psutil CPU sampling semantics](https://psutil.io/api/), [util-linux ISO session timestamps](https://github.com/util-linux/util-linux/blob/master/login-utils/last.1.adoc).
