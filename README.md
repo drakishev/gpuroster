@@ -16,7 +16,8 @@ Use Linux and Python 3.10 or newer:
 git clone https://github.com/drakishev/gpuroster.git
 cd gpuroster
 python3 -m venv venv
-venv/bin/python -m pip install .
+venv/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements/build.lock -r requirements/runtime.lock
+venv/bin/python -m pip install --no-deps --no-build-isolation .
 venv/bin/gpuroster --demo
 ```
 
@@ -32,7 +33,8 @@ Use Python 3.10 or newer on Linux, an NVIDIA driver providing NVML (`libnvidia-m
 git clone https://github.com/drakishev/gpuroster.git
 cd gpuroster
 python3 -m venv venv
-venv/bin/python -m pip install .
+venv/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements/build.lock -r requirements/runtime.lock
+venv/bin/python -m pip install --no-deps --no-build-isolation .
 bash start.sh
 ```
 
@@ -48,7 +50,9 @@ Replace the example SSH destination with your own. Open the same local URL after
 
 ## Installed command
 
-After `pip install .`, activate the environment and run `gpuroster` from any directory. `gpuroster --version` reports the installed version. Templates, CSS, Chart.js, and dashboard JavaScript are included in the wheel; the dashboard needs no external network access. GPU Roster is supported on Linux with Python 3.10 or newer.
+After installation, activate the environment and run `gpuroster` from any directory. `gpuroster --version` reports the installed version. Templates, CSS, Chart.js, and dashboard JavaScript are included in the wheel; the dashboard needs no external network access. GPU Roster is supported on Linux with Python 3.10 or newer.
+
+The commands above use [tested dependency locks](requirements/README.md). Normal pip resolution remains supported by the package metadata. CI also produces [verified build bundles](docs/releases.md) with a wheel, source archive, locks, checksums, and build information after all checks pass.
 
 See the [deployment guide](docs/deployment.md) for systemd, password files, persistent state, SSH/TLS access, and migration/rollback. The [production-serving decision](docs/architecture/ADR-004-production-deployment.md) records alternatives and measured results.
 
@@ -96,10 +100,12 @@ When neither password option is set, the launcher also reads `dashboard-password
 Ordinary tests need no GPU, login records, credentials, or production database. Browser tests use synthetic metrics and also exercise the real packaged assets with external requests blocked.
 
 ```bash
-venv/bin/python -m pip install -r requirements-dev.txt
+venv/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements/build.lock -r requirements/dev.lock
 venv/bin/python -m playwright install --with-deps chromium
 venv/bin/python -m unittest discover -s tests -v
 venv/bin/python -m unittest discover -s tests/browser -v
+venv/bin/python -m unittest discover -s tests/packaging -v
+venv/bin/python scripts/lock_dependencies.py --check
 venv/bin/ruff check .
 venv/bin/ruff format --check .
 node --check gpuroster/static/dashboard.js
@@ -112,7 +118,7 @@ Backend tests alone need only the runtime dependencies:
 venv/bin/python -m unittest discover -s tests -v
 ```
 
-[CI](.github/workflows/ci.yml) installs dependencies in clean environments, tests Python 3.10/3.12/3.14, runs Chromium regressions, checks Python formatting/lint and JavaScript syntax, builds a wheel from the source distribution, tests a clean installation outside the checkout, and audits runtime dependencies. See [benchmarks](docs/benchmarks.md), [Phase 5 validation](docs/validation/phase-five.md), and [contribution guidelines](CONTRIBUTING.md).
+[CI](.github/workflows/ci.yml) checks locked installs on Python 3.10/3.12/3.14 and separately tests current compatible runtime dependencies. It runs Chromium regressions, checks formatting/lint and asset/lock drift, tests installed packages, audits runtime dependencies, and compares two independent release builds before uploading the tested bundle. See [benchmarks](docs/benchmarks.md), [Phase 6 validation](docs/validation/phase-six.md), and [contribution guidelines](CONTRIBUTING.md).
 
 ## Architecture
 
@@ -161,4 +167,4 @@ Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-drive
 
 Connected-time estimates now handle overlap and window boundaries, but login logs may be rotated, truncated, incomplete, or inaccessible. SSH process visibility depends on OS permissions. These estimates are not billing records or GPU usage time.
 
-Frontend assets are served locally under a restrictive content policy; Node is needed only to rebuild them. See the [asset workflow](frontend/README.md). Runtime dependencies are not fully locked. Demo data is illustrative; it cannot validate driver support or target-host permissions.
+Frontend assets are served locally under a restrictive content policy; Node is needed only to rebuild them. See the [asset workflow](frontend/README.md). Python locks cover deployment/build dependencies; operating-system, browser-system, and NVIDIA driver dependencies remain external. Demo data is illustrative; it cannot validate driver support or target-host permissions.

@@ -4,18 +4,21 @@ Use the installed `gpuroster` command under a service manager. For actual monito
 
 ## Install the package
 
-Build with Python 3.10 or newer. The wheel includes Python code, templates, and dashboard JavaScript; it does not contain a database or credentials.
+Use a reviewed [CI build bundle](releases.md), or build one from a clean Git checkout with Python 3.10 or newer. The wheel includes Python code, templates, and dashboard JavaScript; it does not contain a database or credentials.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install build==1.6.1
-.venv/bin/python -m build
+.venv/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements/build.lock
+.venv/bin/python scripts/build_release.py --output dist/release
+(cd dist/release && sha256sum -c SHA256SUMS)
 sudo python3 -m venv /opt/gpuroster/venv
-sudo /opt/gpuroster/venv/bin/python -m pip install dist/gpuroster-0.5.0-py3-none-any.whl
+sudo /opt/gpuroster/venv/bin/python -m pip install --require-hashes --only-binary=:all: -r dist/release/runtime.lock
+sudo /opt/gpuroster/venv/bin/python -m pip install --no-deps dist/release/gpuroster-0.5.1-py3-none-any.whl
+sudo /opt/gpuroster/venv/bin/python -m pip check
 /opt/gpuroster/venv/bin/gpuroster --version
 ```
 
-Keep the installed environment separate from the source checkout. Runtime dependencies currently have minimum versions, with Waitress and NVML bindings pinned; the environment is not a fully locked reproducible deployment. Save the wheel and a local dependency inventory for rollback.
+Keep the installed environment separate from the source checkout. The bundled lock selects exact runtime versions and verifies dependency hashes. Python, operating-system, and NVIDIA driver versions remain outside this lock. Save the entire reviewed bundle and the previous environment's dependency inventory for rollback; CI artifacts expire after 30 days.
 
 The host needs its NVIDIA driver and accessible NVML library. The CLI fallback needs `nvidia-smi` in the service's PATH. Run as an unprivileged account with the device/process permissions required by your host. Missing access appears as partial or unavailable data. Avoid granting root just to improve process attribution.
 
@@ -65,13 +68,14 @@ The checkout launcher (`bash start.sh` or `python app.py`) retains the original 
 
 Before changing deployments, stop the old service and make a private backup of its SQLite database. Copy it into the new state directory with service-account ownership and mode 0600, or deliberately configure its existing path and suitable write permissions. Do not run old and new collectors together. No deployment command in this repository copies or migrates an existing database automatically.
 
-The first collector write retains the Phase 2 additive `gpu_uuid` migration and 31-day retention policy. Phase 3 makes no new schema change. To roll back, stop the new process, reinstall the saved previous environment, and use the appropriate database backup if necessary. A software rollback cannot restore rows removed by normal retention. Keep backups, credential files, and real snapshots outside the repository.
+The first collector write retains the Phase 2 additive `gpu_uuid` migration and 31-day retention policy. Phases 3–6 make no new schema change. To roll back, stop the new process, reinstall the saved previous environment, and use the appropriate database backup if necessary. A software rollback cannot restore rows removed by normal retention. Keep backups, credential files, and real snapshots outside the repository.
 
 ## Validate without installing a service
 
 ```bash
 python3 -m venv /tmp/gpuroster-install
-/tmp/gpuroster-install/bin/python -m pip install dist/gpuroster-0.5.0-py3-none-any.whl
+/tmp/gpuroster-install/bin/python -m pip install --require-hashes --only-binary=:all: -r dist/release/runtime.lock
+/tmp/gpuroster-install/bin/python -m pip install --no-deps dist/release/gpuroster-0.5.1-py3-none-any.whl
 python3 scripts/smoke_install.py /tmp/gpuroster-install/bin/gpuroster
 ```
 

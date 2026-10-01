@@ -50,3 +50,10 @@ are not normalized by that environment variable. Test normalization of archive
 metadata, preserve file bytes and modes, and compare both artifacts after two
 independent builds. Pin build dependencies and build from an exported commit so
 ignored databases, credentials, and local files cannot enter the source tree.
+
+Normalization passed tests preserving archive file bytes/modes while replacing
+volatile timestamps, ownership, ordering, and gzip headers. Two independent
+builds from a clean fixture commit then produced identical wheels and source
+archives. The exact resulting wheel installed with the runtime lock and passed
+live-ownership and isolated-demo smoke checks, including both shutdown signals.
+CI retains these builds only after the other validation jobs succeed.
