@@ -139,3 +139,7 @@ Docker excludes 11 fake credential/database/environment fixtures. It never
 copies the original ignored database or credentials. Ordinary CI builds and
 tests the image without a GPU. CI does not publish to Docker Hub or GHCR. Review
 and refresh the pinned base digest and dependency locks during maintenance.
+
+See [validation results](validation/phase-eight.md) and the
+[container architecture decision](architecture/ADR-008-container-deployment.md)
+for the tested environment, measurements, and remaining limits.

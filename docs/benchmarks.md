@@ -207,3 +207,17 @@ baseline of 14 after traffic. Server RSS ended at 51.69 MiB and remained there
 after an idle minute and explicit GC. The criteria passed without a runtime
 change. This is evidence for a bounded sampled range under this fixed synthetic
 workload, not proof of long-term leak freedom or native-driver behavior.
+
+## Container deployment smoke measurements
+
+Phase 8 validates deployment behavior rather than client capacity. Final single
+smoke runs reached healthy status in 6.246 seconds for demo, 6.047 seconds for
+no-GPU live mode, and 6.826 seconds with eight real GPUs. SIGINT/SIGTERM exits
+took 0.418–0.640 seconds across those runs. Times include Docker/Compose calls,
+use faster test-only health polling, and exclude image building. The local
+image is 142,615,897 bytes. All 19 observed GPU process owners matched the host.
+
+The [validation report](validation/phase-eight.md) records method, environment,
+acceptance checks, and limits. [Aggregate results](../benchmarks/results/container-deployment-2026-10-01.json)
+contain no real process or account identities. These short runs do not replace
+the earlier HTTP, storage, browser, or memory benchmarks.
