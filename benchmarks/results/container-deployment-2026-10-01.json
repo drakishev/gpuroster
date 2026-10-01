@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-01",
+  "source_commit": "8cac56d84890d187b7f9a5af015571b5562503ff",
+  "version": "0.6.0",
+  "platform": "linux/amd64",
+  "docker_version": "27.5.1",
+  "compose_version": "5.5.1",
+  "buildx_version": "0.37.2",
+  "nvidia_container_toolkit_version": "1.18.2",
+  "nvidia_driver_version": "590.48.01",
+  "gpu_model": "NVIDIA H200",
+  "mig_enabled": false,
+  "image_size_bytes": 142615897,
+  "base_image": "python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e",
+  "health_interval_seconds": 1,
+  "collection_interval_seconds": 0.25,
+  "build_context_private_fixtures_excluded": 11,
+  "gpu_independent_smoke": {
+    "unauthenticated_start_refused": true,
+    "cases": [
+      {
+        "mode": "demo",
+        "passed": true,
+        "ready_seconds": 6.246,
+        "sigint_seconds": 0.505,
+        "sigterm_seconds": 0.418,
+        "gpus": 4,
+        "process_owners_compared": 0,
+        "processes_vanished_before_comparison": 0
+      },
+      {
+        "mode": "live",
+        "passed": true,
+        "ready_seconds": 6.047,
+        "sigint_seconds": 0.586,
+        "sigterm_seconds": 0.56,
+        "gpus": 0,
+        "process_owners_compared": 0,
+        "processes_vanished_before_comparison": 0
+      }
+    ]
+  },
+  "gpu_smoke": {
+    "unauthenticated_start_refused": true,
+    "cases": [
+      {
+        "mode": "gpu",
+        "passed": true,
+        "ready_seconds": 6.826,
+        "sigint_seconds": 0.578,
+        "sigterm_seconds": 0.64,
+        "gpus": 8,
+        "process_owners_compared": 19,
+        "processes_vanished_before_comparison": 0
+      }
+    ]
+  },
+  "limitations": [
+    "Single smoke runs, not percentile or capacity benchmarks.",
+    "Readiness includes Compose orchestration and health polling; excludes image build and pull.",
+    "Shutdown includes Docker CLI overhead.",
+    "MIG disabled; no GPU workloads launched or GPU configuration changed.",
+    "Observed process attribution, not a controlled multi-user workload.",
+    "No rootless, other-architecture, OS-image vulnerability, or long container soak validation."
+  ]
+}

@@ -27,7 +27,7 @@ cd dist/release
 sha256sum -c SHA256SUMS
 ```
 
-`--expected-version 0.5.1` can enforce a planned version. The script rejects dirty
+`--expected-version 0.6.0` can enforce a planned version. The script rejects dirty
 working trees, mismatched package/launcher versions, and nonempty output
 directories. It exports the committed Git tree; ignored local configuration,
 databases, caches, and environments are excluded. It never builds from the live
@@ -56,7 +56,7 @@ runtime lock, then install the wheel without resolving dependencies again:
 sha256sum -c SHA256SUMS
 python3 -m venv /tmp/gpuroster-release-check
 /tmp/gpuroster-release-check/bin/python -m pip install --require-hashes --only-binary=:all: -r runtime.lock
-/tmp/gpuroster-release-check/bin/python -m pip install --no-deps gpuroster-0.5.1-py3-none-any.whl
+/tmp/gpuroster-release-check/bin/python -m pip install --no-deps gpuroster-0.6.0-py3-none-any.whl
 /tmp/gpuroster-release-check/bin/python -m pip check
 /tmp/gpuroster-release-check/bin/gpuroster --demo
 ```

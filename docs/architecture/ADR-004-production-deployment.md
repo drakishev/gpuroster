@@ -2,6 +2,10 @@
 
 Status: accepted, 2026-10-01.
 
+Follow-up: [ADR-008](ADR-008-container-deployment.md) adds Docker deployment after
+validating host process attribution. The original native deployment decision
+and its context below remain applicable.
+
 ## Context and requirements
 
 The shared cache and collector belong to one process. Flask's development server is unsuitable for production, and a generic multi-worker launcher would duplicate hardware polling and history writes. Deployment needs an installable artifact with assets, explicit startup/shutdown, protected credentials, persistent writable state, and GPU-independent installation tests.
