@@ -102,7 +102,7 @@ the volume. Docker's [volume backup guide](https://docs.docker.com/engine/storag
 describes volume copying. Keep backups private. Check out a reviewed commit,
 rebuild/recreate with the commands above, then check health and source status.
 Rollback uses the saved image and, when needed, the backup; it cannot recover
-rows deleted by normal retention. Version 0.6.0 adds no schema migration.
+rows deleted by normal retention. Neither 0.6.0 nor 0.7.0 adds a schema migration.
 
 The existing checkout database is never imported automatically. To migrate,
 stop the old collector, back up its database, and copy it into the named volume

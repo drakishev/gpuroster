@@ -17,7 +17,7 @@ FROM python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc07
 ARG APP_UID=10001
 ARG APP_GID=10001
 LABEL org.opencontainers.image.title="GPU Roster" \
-      org.opencontainers.image.version="0.6.0" \
+      org.opencontainers.image.version="0.7.0" \
       org.opencontainers.image.source="https://github.com/drakishev/gpuroster"
 ENV PATH="/opt/gpuroster/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \

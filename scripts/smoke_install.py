@@ -71,7 +71,7 @@ def main():
             subprocess.check_output(
                 [executable, "--version"], cwd=directory, env=env, text=True
             ).strip()
-            == "0.6.0"
+            == "0.7.0"
         )
         for signum in (signal.SIGTERM, signal.SIGINT):
             command = [executable]

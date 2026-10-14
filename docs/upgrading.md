@@ -23,9 +23,10 @@ Before the first snapshot, `/api/stats` returns `503 collector_not_ready`. Start
 
 Connected time is the union of a user's session intervals, clipped to each window. Simultaneous terminals count once. “Today” uses the configured timezone (including DST); week/month mean the preceding 7/30 elapsed days. Non-interactive SSH contributes only currently visible evidence and is not persisted as an authoritative session ledger.
 
-## Dashboard redesign (October 2026)
+## 0.7.0: dashboard redesign (October 2026)
 
-The API, database, and configuration are unchanged. Visible dashboard text
+The API, database, and configuration are unchanged; install the 0.7.0 wheel
+as usual. Visible dashboard text
 changed ("Recent samples", "7 days", "Showing 1 session"), and times now use
 `GPUROSTER_TIMEZONE` with the zone named next to them. The API remains UTC. Use
 the JSON API rather than scraping page text. See
