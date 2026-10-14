@@ -36,7 +36,7 @@
 {% if config['DEMO'] %}
   <div id="demo-banner" class="banner banner-info" role="note"><span><strong>Synthetic demo.</strong> GPUs, users, system metrics, and history are generated. No host monitoring or saved data.</span></div>
 {% endif %}
-  <div id="status-banner" class="banner banner-warn" role="status" aria-live="polite" hidden>Waiting for the first update…</div>
+  <div id="status-banner" class="banner banner-warn is-quiet" role="status" aria-live="polite"></div>
 
   <!-- Host summary -->
   <section aria-labelledby="summary-heading">
@@ -211,7 +211,7 @@
     <div class="panel-head">
       <div>
         <h2 id="session-heading" class="panel-title">Session history</h2>
-        <p class="panel-subtitle">Logins in the last 30 days</p>
+        <p class="panel-subtitle">Most recent logins</p>
       </div>
       <button type="button" class="toggle-button" data-toggle-short="true" id="btn-short" aria-pressed="false">Hide &lt;1 min</button>
     </div>
@@ -234,7 +234,7 @@
       </table>
     </div>
     <div class="table-footer">
-      <span id="session-count"></span>
+      <span id="session-count" tabindex="-1"></span>
       <button type="button" class="link-button" id="session-more" hidden>Show more</button>
     </div>
   </section>
@@ -244,7 +244,7 @@
 <footer class="shell page-footer">
   <span>GPU Roster {{ version }}</span>
   <span id="footer-collector">Collector starting…</span>
-  <span>Times in {{ config['TIMEZONE'] }}</span>
+  <span id="footer-timezone">Times in {{ config['TIMEZONE'] }}</span>
 </footer>
 
 <script src="{{ url_for('static', filename='dashboard.js') }}" defer></script>

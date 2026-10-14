@@ -28,15 +28,20 @@ icons must come from CSS.
   or UNKNOWN. FREE needs low utilization, a known empty process list, and less
   than 5% memory in use, so a failed process probe or memory held by an
   invisible process never shows as free. The header, summary tiles, and browser
-  tab title show the free count.
+  tab title show the free count. When any GPU's utilization or the process list
+  is unknown, they say "unknown" instead of a count. Host-wide tiles (average
+  utilization, total GPU memory) show "—" unless every GPU reports the value.
 - **In-place updates.** GPU cards are keyed by UUID and updated in place. Each
   card has a sparkline of the rolling live history and a memory meter. Process
   rows add the PID and sort by GPU, then memory. The user table shows each
   person's share of total GPU memory.
 - **Stable, validated series colors.** GPUs get slots from a fixed
-  eight-color categorical palette in display order on first sight, keyed by
-  UUID. Colors follow the device when its index changes and stay distinct for
-  up to eight GPUs. Adjacent slots pass color-vision-deficiency separation in
+  eight-color categorical palette, keyed by UUID and assigned in display
+  order. A new series takes the lowest slot no displayed series uses, and
+  slots of GPUs or history series that are no longer shown are released.
+  Colors therefore follow a device when its index changes and stay distinct for
+  up to eight GPUs, even after a GPU is replaced while the page is open.
+  Series hidden through the chart legend stay hidden across refreshes. Adjacent slots pass color-vision-deficiency separation in
   both themes. Status colors (good, warning, critical) are kept for state and
   always appear with a text label.
 - **Light and dark themes.** CSS custom properties define both themes. The page
@@ -47,15 +52,25 @@ icons must come from CSS.
   tokens and re-theme in place.
 - **Times in the reporting timezone.** Chart labels, session times, and the
   last-update clock use `GPUROSTER_TIMEZONE`, the zone that already defines
-  "today". Each view names the zone. The API stays UTC.
-- **Quieter status.** The status banner appears only for problems. A
-  `warming_up` CPU baseline no longer marks the page PARTIAL.
+  "today". Each view names the zone, and chart tooltips include the zone
+  abbreviation so the repeated hour at a DST change stays distinguishable. If
+  the browser does not recognize the configured name (for example
+  `localtime`), the page shows UTC and says so in the footer. The API stays
+  UTC.
+- **Quieter status.** The status banner appears only for problems. When
+  everything is healthy it stays in the accessibility tree as an empty,
+  collapsed live region, so a new problem is announced. A `warming_up` CPU
+  baseline no longer marks the page PARTIAL.
 - **Fewer, smaller session panels.** Connected time is one ranked bar list with
   a period switch; the duplicate grouped chart is gone. Session history pages
-  25 rows at a time. Filters keep keyboard focus across refreshes.
+  25 rows at a time. Choosing a filter updates the buttons in place, so
+  keyboard focus stays on the chosen one. After the last page is revealed,
+  focus moves to the row count.
 - **Accessibility.** The page adds a skip link, `aria-pressed` segmented
   controls, visible focus rings, a reduced-motion mode, and a status live
-  region.
+  region. Body text meets WCAG AA contrast (at least 4.5:1) in both themes.
+  On phones the sticky header stays on one line by dropping the subtitle and
+  then the clock, and summary totals wrap instead of being cut off.
 
 ## Alternatives
 
@@ -96,7 +111,8 @@ redesign adds no new leak pattern.
 
 ## Consequences
 
-The API, schema, and configuration are unchanged. Integrations that scrape the
+The API, schema, and configuration are unchanged. The package version moves
+to 0.7.0 because the shipped files change. Integrations that scrape the
 page should use the JSON API. Some visible strings changed: "Recent samples",
 "7 days", and "Showing 1 session". The packaged assets now include
 `static/theme.js` and `static/favicon.svg`, and the wheel, container, and smoke

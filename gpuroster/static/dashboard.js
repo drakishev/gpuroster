@@ -12,6 +12,7 @@ const palettes = {
 const backendNames = {nvml: 'NVML', 'nvidia-smi': 'nvidia-smi', demo: 'Synthetic'};
 const panelErrors = new Map();
 const seriesSlots = new Map();
+const hiddenSeries = new Set();
 const gpuCards = new Map();
 let lastSuccess = 0;
 let collectionStale = false;
@@ -55,7 +56,10 @@ function tableMessage(id, columns, message) {
 function setValue(id, main, unit = '') {
   const target = byId(id);
   target.replaceChildren(document.createTextNode(main));
-  if (unit) target.append(element('span', 'kpi-unit', unit));
+  if (!unit) return;
+  // A leading space stays outside the no-wrap unit so a narrow tile can wrap the total onto its own line.
+  if (unit.startsWith(' ')) target.append(document.createTextNode(' '));
+  target.append(element('span', 'kpi-unit', unit.trimStart()));
 }
 function setBar(fill, percentage, warnAt = Infinity, critAt = Infinity) {
   const known = finite(percentage);
@@ -66,7 +70,7 @@ function setBar(fill, percentage, warnAt = Infinity, critAt = Infinity) {
 function fmtNumber(value) { return Number.isInteger(value) ? String(value) : value.toFixed(1); }
 function fmtMemory(mib) {
   if (!finite(mib)) return 'Unavailable';
-  return mib >= 1024 ? (mib / 1024).toFixed(1) + ' GiB' : mib + ' MiB';
+  return mib >= 1024 ? (mib / 1024).toFixed(1) + ' GiB' : Math.round(mib) + ' MiB';
 }
 function fmtDuration(minutes) {
   if (!finite(minutes)) return 'Unavailable';
@@ -78,15 +82,19 @@ function fmtDuration(minutes) {
 function plural(count, noun) { return count + ' ' + noun + (count === 1 ? '' : 's'); }
 
 /* Times display in the configured reporting timezone, which also defines "today". */
+const configuredZone = document.body.dataset.timezone || 'UTC';
 const displayZone = (() => {
-  const zone = document.body.dataset.timezone || 'UTC';
   try {
-    new Intl.DateTimeFormat(undefined, {timeZone: zone});
-    return zone;
+    new Intl.DateTimeFormat(undefined, {timeZone: configuredZone});
+    return configuredZone;
   } catch (error) {
     return 'UTC';
   }
 })();
+// Some names the server accepts (e.g. "localtime") are unknown to browsers; say what is actually shown.
+if (displayZone !== configuredZone) {
+  byId('footer-timezone').textContent = 'Times in UTC (this browser does not recognize “' + configuredZone + '”)';
+}
 function timeFormat(options) { return new Intl.DateTimeFormat(undefined, {timeZone: displayZone, hourCycle: 'h23', ...options}); }
 const formats = {
   clock: timeFormat({hour: '2-digit', minute: '2-digit', second: '2-digit'}),
@@ -94,7 +102,9 @@ const formats = {
   weekdayHour: timeFormat({weekday: 'short', hour: '2-digit', minute: '2-digit'}),
   dayHour: timeFormat({month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}),
   full: timeFormat({weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}),
-  fullClock: timeFormat({weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'}),
+  // Tooltips name the zone so the repeated hour at a DST change stays distinguishable.
+  tooltip: timeFormat({weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short'}),
+  tooltipClock: timeFormat({weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'}),
 };
 function parseTime(value) {
   if (finite(value)) return new Date(value * 1000);
@@ -119,12 +129,24 @@ function readInk() {
 }
 let ink = readInk();
 
-// Color follows identity (GPU UUID), assigned in display order on first sight.
+// Color follows identity (GPU UUID): each new series takes the lowest slot no displayed series uses.
 function seriesColor(key) {
-  if (!seriesSlots.has(key)) seriesSlots.set(key, seriesSlots.size);
+  if (!seriesSlots.has(key)) {
+    const used = new Set(seriesSlots.values());
+    let slot = 0;
+    while (used.has(slot)) slot++;
+    seriesSlots.set(key, slot);
+  }
   const palette = palettes[ink.scheme];
   return palette[seriesSlots.get(key) % palette.length];
 }
+// Release slots of series no longer shown, then assign new ones in priority order.
+function syncSeriesSlots(keys) {
+  const shown = new Set(keys);
+  for (const key of [...seriesSlots.keys()]) if (!shown.has(key)) seriesSlots.delete(key);
+  keys.forEach(seriesColor);
+}
+function datasetKey(dataset) { return dataset.id !== undefined ? dataset.id : 'index:' + dataset.gpu; }
 function userColor(user) {
   let hash = 0;
   for (const char of String(user)) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
@@ -162,6 +184,15 @@ function userChip(user) {
   return chip;
 }
 function gpuKey(gpu) { return gpu.uuid || 'index:' + gpu.index; }
+function gpuKeys(gpus) {
+  const seen = new Set();
+  return gpus.map((gpu, position) => {
+    let key = gpuKey(gpu);
+    if (seen.has(key)) key += '#' + position;
+    seen.add(key);
+    return key;
+  });
+}
 
 /* Status */
 function showStatus() {
@@ -174,10 +205,10 @@ function showStatus() {
     pill.dataset.state = state.toLowerCase();
   }
   const problem = (stale ? 'Updates are delayed. Displayed values may be out of date. ' : '') + errors.join(' ');
+  // The live region stays in the accessibility tree (empty and collapsed) so new problems are announced.
   const banner = byId('status-banner');
-  const message = problem || (lastSuccess ? 'Metrics are updating.' : 'Waiting for the first update…');
-  if (banner.textContent !== message) banner.textContent = message;
-  banner.hidden = !problem;
+  if (banner.textContent !== problem) banner.textContent = problem;
+  banner.classList.toggle('is-quiet', !problem);
 }
 function setError(key, message) {
   if (message) panelErrors.set(key, message);
@@ -247,13 +278,22 @@ function themeChart() {
 function applyChartData(labels, titles, datasets) {
   lastChart = {labels, titles, datasets};
   if (!utilChart) return;
+  // Series hidden through the legend stay hidden when refreshed data replaces the datasets.
+  if (typeof utilChart.isDatasetVisible === 'function') {
+    utilChart.data.datasets.forEach((dataset, index) => {
+      if (utilChart.isDatasetVisible(index)) hiddenSeries.delete(dataset.seriesKey);
+      else hiddenSeries.add(dataset.seriesKey);
+    });
+  }
   utilChart.data.labels = labels;
   // Order series by display index so the legend reads GPU 0, 1, 2… regardless of UUIDs.
   const order = dataset => finite(dataset.gpu) ? dataset.gpu : Infinity;
   const sorted = [...datasets].sort((a, b) => order(a) - order(b) || String(a.id).localeCompare(String(b.id)));
   utilChart.data.datasets = sorted.map(dataset => {
-    const color = seriesColor(dataset.id !== undefined ? dataset.id : 'index:' + dataset.gpu);
+    const seriesKey = datasetKey(dataset);
+    const color = seriesColor(seriesKey);
     return {
+      seriesKey, hidden: hiddenSeries.has(seriesKey),
       label: dataset.label || 'GPU ' + dataset.gpu, data: dataset.data, borderColor: color, backgroundColor: color,
       borderWidth: 2, borderCapStyle: 'round', borderJoinStyle: 'round', pointRadius: 0, pointHoverRadius: 4,
       pointHoverBorderWidth: 2, pointHoverBorderColor: ink.surface, tension: 0.3, spanGaps: false,
@@ -273,7 +313,7 @@ function renderLiveChart(history) {
     const device = historyDevices[id];
     return {id, gpu: device ? device.index : id, data: ordered.map(timestamp => samples.has(timestamp) ? samples.get(timestamp) : null)};
   });
-  applyChartData(ordered.map(ts => fmtTime(ts, formats.clock)), ordered.map(ts => fmtTime(ts, formats.fullClock)), datasets);
+  applyChartData(ordered.map(ts => fmtTime(ts, formats.clock)), ordered.map(ts => fmtTime(ts, formats.tooltipClock)), datasets);
   byId('util-chart-title').textContent = 'Recent samples · smoothed · ' + displayZone;
   const span = ordered.length > 1 && finite(ordered[0]) ? (ordered[ordered.length - 1] - ordered[0]) / 60 : null;
   byId('util-chart-note').textContent = span !== null && collectorInterval
@@ -291,7 +331,7 @@ async function fetchHistoryChart(range) {
     const data = await fetchJSON('/api/gpu_history?range=' + encodeURIComponent(range));
     if (request !== historyRequest || range !== utilRange) return;
     const info = rangeInfo[range];
-    applyChartData(data.labels.map(label => fmtTime(label, info.format)), data.labels.map(label => fmtTime(label, formats.full)), data.datasets);
+    applyChartData(data.labels.map(label => fmtTime(label, info.format)), data.labels.map(label => fmtTime(label, formats.tooltip)), data.datasets);
     byId('util-chart-title').textContent = info.title + ' · ' + displayZone;
     byId('util-chart-note').textContent = data.points ? plural(data.points, 'data point') : 'No data yet — history builds up while the server runs.';
     setError('historyRequest', null);
@@ -382,9 +422,10 @@ function updateGPUCard(card, gpu, key, processesKnown) {
     : fmtNumber(temperature) + ' °C' + (level === 'crit' ? ' · critical' : level === 'warn' ? ' · hot' : '');
   card.power.textContent = finite(gpu.power) ? gpu.power.toFixed(0) + ' W' : 'Power unavailable';
   const users = [...new Set((gpu.processes || []).map(process => process.user))].sort();
-  const usersKey = ink.scheme + '\u0000' + users.join('\u0000');
+  const usersKey = [ink.scheme, processesKnown, ...users].join('\u0000');
   if (card.usersKey !== usersKey) {
-    card.users.replaceChildren(...users.map(userChip));
+    if (users.length) card.users.replaceChildren(...users.map(userChip));
+    else card.users.replaceChildren(element('span', '', processesKnown ? 'No visible processes' : 'Processes unavailable'));
     card.usersKey = usersKey;
   }
 }
@@ -433,11 +474,10 @@ function renderGPUGrid(gpus, processesKnown) {
     grid.replaceChildren(element('p', 'empty-state', 'No GPUs detected.'));
     return;
   }
-  const seen = new Set();
+  const keys = gpuKeys(gpus);
+  const seen = new Set(keys);
   const cards = gpus.map((gpu, position) => {
-    let key = gpuKey(gpu);
-    if (seen.has(key)) key += '#' + position;
-    seen.add(key);
+    const key = keys[position];
     if (!gpuCards.has(key)) gpuCards.set(key, createGPUCard());
     const card = gpuCards.get(key);
     updateGPUCard(card, gpu, key, processesKnown);
@@ -494,7 +534,7 @@ function renderUserGPUTable(users, gpus) {
       track.title = (info.mem_gb / totalGiB * 100).toFixed(1) + '% of GPU memory';
       memory.append(track);
     }
-    memory.append(document.createTextNode(finite(info.mem_gb) ? info.mem_gb + ' GiB' : 'Unavailable'));
+    memory.append(element('span', 'share-value', finite(info.mem_gb) ? info.mem_gb.toFixed(1) + ' GiB' : 'Unavailable'));
     row.append(cell(userChip(name)), cell(info.gpu_indices.join(', ') || 'Unmapped'), cell(info.proc_count, 'num'), cell(memory, 'num'));
     return row;
   }));
@@ -510,30 +550,33 @@ function renderConnections(connections) {
 
 /* Host summary */
 function renderSummary(data, gpusOk, processesOk) {
+  // Host-wide figures are shown only when every GPU reports the input; a partial sum would read as a total.
   const gpus = gpusOk ? data.gpus : [];
-  const utilization = gpus.map(gpu => gpu.utilization).filter(finite);
-  const average = gpusOk && utilization.length ? utilization.reduce((sum, value) => sum + value, 0) / utilization.length : null;
+  const complete = gpus.every(gpu => finite(gpu.utilization));
+  const average = gpus.length && complete ? gpus.reduce((sum, gpu) => sum + gpu.utilization, 0) / gpus.length : null;
   if (finite(average)) setValue('sys-gpu-util', fmtNumber(Math.round(average * 10) / 10), '%');
   else setValue('sys-gpu-util', '—');
   setBar(byId('sys-gpu-util-bar'), average);
 
-  const memory = gpus.filter(gpu => finite(gpu.memory_used) && finite(gpu.memory_total));
-  const used = memory.reduce((sum, gpu) => sum + gpu.memory_used, 0) / 1024;
-  const total = memory.reduce((sum, gpu) => sum + gpu.memory_total, 0) / 1024;
-  if (total > 0) setValue('sys-vram', used.toFixed(1), ' / ' + fmtNumber(Math.round(total * 10) / 10) + ' GiB');
+  const memoryComplete = gpus.length > 0 && gpus.every(gpu => finite(gpu.memory_used) && gpu.memory_total > 0);
+  const used = memoryComplete ? gpus.reduce((sum, gpu) => sum + gpu.memory_used, 0) / 1024 : null;
+  const total = memoryComplete ? gpus.reduce((sum, gpu) => sum + gpu.memory_total, 0) / 1024 : null;
+  if (memoryComplete) setValue('sys-vram', used.toFixed(1), ' / ' + fmtNumber(Math.round(total * 10) / 10) + ' GiB');
   else setValue('sys-vram', '—');
-  setBar(byId('sys-vram-bar'), total > 0 ? used / total * 100 : null);
+  setBar(byId('sys-vram-bar'), memoryComplete ? used / total * 100 : null);
 
   const states = gpus.map(gpu => gpuState(gpu, processesOk));
-  const complete = data.gpus.every(gpu => finite(gpu.utilization));
-  if (gpusOk) setValue('sys-active-gpus', complete ? String(states.filter(state => state === 'active').length) : '—', ' / ' + data.gpus.length);
-  else setValue('sys-active-gpus', '—');
+  const active = states.filter(state => state === 'active').length;
   const free = states.filter(state => state === 'free').length;
-  byId('sys-free-gpus').textContent = !gpusOk || !gpus.length ? ' ' : free ? free + ' free' : 'None free';
-  byId('gpu-summary').textContent = gpusOk && gpus.length
-    ? [plural(gpus.length, 'GPU'), states.filter(state => state === 'active').length + ' active', free + ' free'].join(' · ')
+  // FREE needs a known utilization and process list for every GPU; otherwise the count is unknown.
+  const freeKnown = gpus.length > 0 && complete && processesOk;
+  if (gpusOk) setValue('sys-active-gpus', complete ? String(active) : '—', ' / ' + data.gpus.length);
+  else setValue('sys-active-gpus', '—');
+  byId('sys-free-gpus').textContent = !gpus.length ? ' ' : !freeKnown ? 'Free count unknown' : free ? free + ' free' : 'None free';
+  byId('gpu-summary').textContent = gpus.length
+    ? [plural(gpus.length, 'GPU'), complete ? active + ' active' : 'activity unknown', freeKnown ? free + ' free' : 'free count unknown'].join(' · ')
     : '';
-  document.title = (gpusOk && gpus.length ? free + '/' + gpus.length + ' free · ' : '') + 'GPU Roster' + (demoMode ? ' · Demo' : '');
+  document.title = (freeKnown ? free + '/' + gpus.length + ' free · ' : '') + 'GPU Roster' + (demoMode ? ' · Demo' : '');
 
   setValue('sys-procs', processesOk ? String(data.processes.length) : '—');
   byId('sys-users').textContent = processesOk ? plural(Object.keys(data.user_gpu).length, 'user') : ' ';
@@ -563,8 +606,12 @@ function renderStats(data) {
   lastHistory = data.history || {};
   historyDevices = data.history_devices || {};
   if (data.collector && finite(data.collector.interval_seconds)) collectorInterval = data.collector.interval_seconds;
-  // Assign series colors in display order before anything draws.
-  [...data.gpus].sort((a, b) => a.index - b.index).forEach(gpu => seriesColor(gpuKey(gpu)));
+  // Keep series colors for what is displayed: current GPUs first (by index), then other charted series.
+  if (gpusOk) {
+    const keys = gpuKeys(data.gpus);
+    const byIndex = data.gpus.map((gpu, position) => [gpu.index, keys[position]]).sort((a, b) => a[0] - b[0]).map(([, key]) => key);
+    syncSeriesSlots([...byIndex, ...Object.keys(lastHistory).sort(), ...(lastChart ? lastChart.datasets.map(datasetKey) : [])]);
+  }
   if (gpusOk) renderGPUGrid(data.gpus, processesOk);
   else gpuUnavailable('GPU metrics unavailable.');
   if (processesOk) {
@@ -644,7 +691,7 @@ function renderSessionTable(sessions) {
   const users = [...new Set(sessions.map(session => session.user))].sort();
   if (sessionUserFilter !== null && !users.includes(sessionUserFilter)) sessionUserFilter = null;
   // Rebuild filters only when they change, so keyboard focus survives refreshes.
-  const chipsKey = [ink.scheme, sessionUserFilter, ...users].join('\u0000');
+  const chipsKey = [ink.scheme, ...users].join('\u0000');
   if (chipsKey !== sessionChipsKey) {
     sessionChipsKey = chipsKey;
     byId('session-filter-pills').replaceChildren(...[null, ...users].map(user => {
@@ -656,7 +703,8 @@ function renderSessionTable(sessions) {
       button.addEventListener('click', () => {
         sessionUserFilter = user;
         sessionLimit = SESSION_PAGE;
-        renderSessionTable(sessionData);
+        byId('session-filter-pills').querySelectorAll('.filter-chip').forEach(chip => chip.setAttribute('aria-pressed', String(chip === button)));
+        renderSessionRows();
       });
       return button;
     }));
@@ -720,8 +768,12 @@ if (sessionsEnabled) {
     renderSessionRows();
   });
   byId('session-more').addEventListener('click', () => {
+    const more = byId('session-more');
+    const focused = document.activeElement === more;
     sessionLimit += SESSION_PAGE;
     renderSessionRows();
+    // The button hides after the last page; keep keyboard focus nearby instead of dropping it to <body>.
+    if (focused && more.hidden) byId('session-count').focus();
   });
   poll(fetchLoginStats, 60000);
   poll(fetchSessions, 60000);
