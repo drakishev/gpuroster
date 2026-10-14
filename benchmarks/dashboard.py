@@ -19,7 +19,9 @@ from gpuroster.server import HTTPServer
 from gpuroster.settings import load_settings
 
 
-def measure(screenshot=None, soak_seconds=0, refresh_interval=0.5):
+def measure(
+    screenshot=None, soak_seconds=0, refresh_interval=0.5, color_scheme="light"
+):
     application = create_app({**load_settings({}), "DEMO": True})
     collector = application.extensions["collector"]
     server = HTTPServer(application, "127.0.0.1", 0)
@@ -42,7 +44,9 @@ def measure(screenshot=None, soak_seconds=0, refresh_interval=0.5):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             for index in range(5):
-                context = browser.new_context(viewport={"width": 1440, "height": 1050})
+                context = browser.new_context(
+                    viewport={"width": 1440, "height": 1050}, color_scheme=color_scheme
+                )
                 page = context.new_page()
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.on(
@@ -172,6 +176,7 @@ if __name__ == "__main__":
     parser.add_argument("--screenshot", type=Path)
     parser.add_argument("--soak-seconds", type=float, default=0)
     parser.add_argument("--refresh-interval", type=float, default=0.5)
+    parser.add_argument("--color-scheme", choices=("light", "dark"), default="light")
     args = parser.parse_args()
     if args.soak_seconds < 0 or args.refresh_interval <= 0:
         parser.error("soak-seconds must be nonnegative and refresh-interval positive")
@@ -181,6 +186,7 @@ if __name__ == "__main__":
                 str(args.screenshot) if args.screenshot else None,
                 args.soak_seconds,
                 args.refresh_interval,
+                args.color_scheme,
             ),
             indent=2,
         )

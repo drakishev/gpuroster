@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-14",
+  "command": "python -m benchmarks.dashboard [--color-scheme dark]",
+  "environment": "Python 3.13, Chromium headless shell, synthetic demo with four GPUs; one machine, sequential runs",
+  "note": "Baseline is main at 09a33a9 measured on the same machine immediately before the redesign; compare runs only within this file.",
+  "baseline_main": {
+    "ready_median_ms": 154.234,
+    "ready_max_ms": 197.773,
+    "update_median_ms": 17.259,
+    "update_p95_ms": 23.838,
+    "retained_js_heap_before_bytes": 2910808,
+    "retained_js_heap_after_100_bytes": 3693916,
+    "retained_js_heap_after_bytes": 4147764,
+    "external_requests": 0,
+    "browser_errors": 0,
+    "http_errors": 0,
+    "assets": [
+      {
+        "path": "/static/dashboard.css",
+        "bytes": 10943
+      },
+      {
+        "path": "/static/vendor/chart.umd.js",
+        "bytes": 205325
+      },
+      {
+        "path": "/static/dashboard.js",
+        "bytes": 17704
+      }
+    ]
+  },
+  "redesign_light": {
+    "ready_median_ms": 214.294,
+    "ready_max_ms": 224.949,
+    "update_median_ms": 19.481,
+    "update_p95_ms": 28.39,
+    "retained_js_heap_before_bytes": 3058804,
+    "retained_js_heap_after_100_bytes": 3913908,
+    "retained_js_heap_after_bytes": 4456504,
+    "external_requests": 0,
+    "browser_errors": 0,
+    "http_errors": 0,
+    "assets": [
+      {
+        "path": "/static/theme.js",
+        "bytes": 323
+      },
+      {
+        "path": "/static/dashboard.css",
+        "bytes": 22056
+      },
+      {
+        "path": "/static/vendor/chart.umd.js",
+        "bytes": 205325
+      },
+      {
+        "path": "/static/dashboard.js",
+        "bytes": 34768
+      }
+    ]
+  },
+  "redesign_dark": {
+    "ready_median_ms": 180.769,
+    "ready_max_ms": 256.32,
+    "update_median_ms": 19.008,
+    "update_p95_ms": 26.303,
+    "retained_js_heap_before_bytes": 2994224,
+    "retained_js_heap_after_100_bytes": 3849416,
+    "retained_js_heap_after_bytes": 4388108,
+    "external_requests": 0,
+    "browser_errors": 0,
+    "http_errors": 0,
+    "assets": [
+      {
+        "path": "/static/theme.js",
+        "bytes": 323
+      },
+      {
+        "path": "/static/dashboard.css",
+        "bytes": 22056
+      },
+      {
+        "path": "/static/vendor/chart.umd.js",
+        "bytes": 205325
+      },
+      {
+        "path": "/static/dashboard.js",
+        "bytes": 34768
+      }
+    ]
+  }
+}

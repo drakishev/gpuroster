@@ -17,7 +17,7 @@ python3 -m venv .venv
 (cd dist/release && sha256sum -c SHA256SUMS)
 sudo python3 -m venv /opt/gpuroster/venv
 sudo /opt/gpuroster/venv/bin/python -m pip install --require-hashes --only-binary=:all: -r dist/release/runtime.lock
-sudo /opt/gpuroster/venv/bin/python -m pip install --no-deps dist/release/gpuroster-0.6.0-py3-none-any.whl
+sudo /opt/gpuroster/venv/bin/python -m pip install --no-deps dist/release/gpuroster-0.7.0-py3-none-any.whl
 sudo /opt/gpuroster/venv/bin/python -m pip check
 /opt/gpuroster/venv/bin/gpuroster --version
 ```
@@ -79,7 +79,7 @@ The first collector write retains the Phase 2 additive `gpu_uuid` migration and 
 ```bash
 python3 -m venv /tmp/gpuroster-install
 /tmp/gpuroster-install/bin/python -m pip install --require-hashes --only-binary=:all: -r dist/release/runtime.lock
-/tmp/gpuroster-install/bin/python -m pip install --no-deps dist/release/gpuroster-0.6.0-py3-none-any.whl
+/tmp/gpuroster-install/bin/python -m pip install --no-deps dist/release/gpuroster-0.7.0-py3-none-any.whl
 python3 scripts/smoke_install.py /tmp/gpuroster-install/bin/gpuroster
 ```
 

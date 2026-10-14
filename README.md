@@ -1,16 +1,53 @@
+<div align="center">
+
+<img src="gpuroster/static/favicon.svg" width="64" height="64" alt="" />
+
 # GPU Roster
 
-A lightweight dashboard for GPU utilization, memory, and process ownership on a shared NVIDIA host.
+**See which GPUs are free and who is using the rest on a shared NVIDIA host.**
 
-The application combines Flask, NVML (with a `nvidia-smi` fallback), psutil, and SQLite. One scheduled collector supplies every dashboard with the same snapshot. It shows live metrics, a rolling utilization chart, and up to 31 days of utilization history. Session estimates are optional. The supported launcher uses one Waitress process with four HTTP worker threads.
+[![CI](https://github.com/drakishev/gpuroster/actions/workflows/ci.yml/badge.svg)](https://github.com/drakishev/gpuroster/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)
+![Linux](https://img.shields.io/badge/platform-Linux-555)
+![No external requests](https://img.shields.io/badge/runtime-offline-2a78d6)
 
-![GPU Roster demo showing synthetic GPUs, users, and history](docs/images/demo-dashboard.png)
+</div>
 
-The screenshot comes from the built-in demo; it contains no real host or user data.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/demo-dashboard-dark.png" />
+  <img alt="GPU Roster demo: summary tiles, four GPU cards marked active or free, a utilization chart, and process and user tables" src="docs/images/demo-dashboard.png" />
+</picture>
 
-## Try without a GPU
+<sub>Screenshot from the built-in demo. It contains no real host or user data.</sub>
 
-For Docker, create a password and start the packaged demo:
+GPU Roster is a small, self-hosted dashboard for GPU utilization, memory, and
+process ownership. It uses Flask, NVML (with an `nvidia-smi` fallback), psutil,
+and SQLite. One scheduled collector feeds every viewer the same snapshot, so
+many people can keep the page open without extra load on the GPUs.
+
+## Highlights
+
+- **Free at a glance.** Each GPU is marked ACTIVE, IDLE, FREE, or UNKNOWN, and
+  the browser tab title shows how many are free, so you can watch from a
+  background tab.
+- **Who holds what.** Processes with owner, PID, and memory, plus each user's
+  share of total GPU memory.
+- **Live and historical charts.** A rolling live view plus today, 7-day, and
+  30-day views from up to 31 days of SQLite history, with stable,
+  color-blind-safe colors per device.
+- **Light and dark themes** that follow your system, with a toggle that
+  remembers your choice. The layout works on phones too.
+- **Safe defaults.** Binds to loopback, supports HTTP Basic authentication, uses
+  a strict content policy, and loads nothing from third parties at runtime.
+  Command arguments and login sessions are hidden unless you enable them.
+- **Honest data.** Partial, stale, and unavailable sources are labeled as such
+  and never shown as zero.
+
+## Quick start
+
+### Try it without a GPU
+
+With Docker, create a password and start the packaged demo:
 
 ```bash
 python3 scripts/container_password.py
@@ -18,10 +55,10 @@ docker compose up --build -d demo
 ```
 
 Open **http://127.0.0.1:18081** and sign in as **viewer** with that password.
-See [Docker deployment](docs/docker.md) for NVIDIA GPU access, persistent history,
-configuration, and validation. The image includes the backend and dashboard.
+See [Docker deployment](docs/docker.md) for NVIDIA GPU access, persistent
+history, configuration, and validation.
 
-Use Linux and Python 3.10 or newer:
+Or with Python 3.10+ on Linux:
 
 ```bash
 git clone https://github.com/drakishev/gpuroster.git
@@ -32,13 +69,22 @@ venv/bin/python -m pip install --no-deps --no-build-isolation .
 venv/bin/gpuroster --demo
 ```
 
-Open **http://127.0.0.1:18081**. Demo mode shows four generated GPUs, example processes/users, synthetic system metrics, and populated live/today/week/month charts. It reads no GPU tools, host processes, or login records, and never opens or writes `GPUROSTER_DB_PATH`. History is generated in memory and disappears on exit. A persistent banner and API mode markers identify the data as synthetic.
+Demo mode shows four generated GPUs, example processes and users, synthetic
+system metrics, and populated live, today, week, and month charts. It reads no
+GPU tools, host processes, or login records. It never opens or writes
+`GPUROSTER_DB_PATH`, and its history lives in memory and disappears on exit. A
+persistent banner and API mode markers identify the data as synthetic.
+`GPUROSTER_DEMO=1` also enables demo mode, and `GPUROSTER_SHOW_SESSIONS=1` adds
+generated session panels. Authentication, loopback restrictions, and privacy
+defaults still apply. See the
+[demo and asset decision](docs/architecture/ADR-005-offline-assets-and-demo.md).
 
-`GPUROSTER_DEMO=1` also enables demo mode. Optional session panels use generated examples when `GPUROSTER_SHOW_SESSIONS=1`. Normal authentication, loopback restrictions, and privacy defaults still apply. After dependency installation, the dashboard works without internet access. See the [demo and asset decision](docs/architecture/ADR-005-offline-assets-and-demo.md).
+### Monitor a real host
 
-## Monitor a real host
-
-Use Python 3.10 or newer on Linux, an NVIDIA driver providing NVML (`libnvidia-ml`), and permission to inspect the relevant processes. `nvidia-smi` is needed for the CLI fallback. Optional session history needs util-linux `last` with ISO timestamp support and readable login records.
+You need an NVIDIA driver that provides NVML (`libnvidia-ml`) and permission
+to inspect the relevant processes. The CLI fallback needs `nvidia-smi`.
+Optional session history needs util-linux `last` with ISO timestamp support
+and readable login records.
 
 ```bash
 git clone https://github.com/drakishev/gpuroster.git
@@ -49,39 +95,39 @@ venv/bin/python -m pip install --no-deps --no-build-isolation .
 bash start.sh
 ```
 
-Open **http://127.0.0.1:18081**. The launcher binds to loopback by default. Missing GPU tools produce visible partial-data status; they do not prevent the web interface from opening.
+Open **http://127.0.0.1:18081**. The launcher binds to loopback by default.
+Missing GPU tools show a visible partial-data status but do not stop the web
+interface from opening.
 
-For a remote machine, keep the application on loopback and use an SSH tunnel:
+After installation you can also run `gpuroster` from any directory in the
+activated environment. `gpuroster --version` prints the installed version. The
+wheel includes the templates, CSS, Chart.js, and dashboard scripts, so the
+dashboard needs no external network access.
+
+### Access a remote machine
+
+Keep the application on loopback and use an SSH tunnel:
 
 ```bash
 ssh -N -L 18081:127.0.0.1:18081 user@example.invalid
 ```
 
-Replace the example SSH destination with your own. Open the same local URL after the tunnel connects. Other users on the server can reach its loopback interface; configure authentication on a shared host.
+Replace the example destination with your own, then open the same local URL.
+Other users on the server can reach its loopback interface, so configure
+authentication on a shared host. For systemd, password files, persistent
+state, TLS, and migration or rollback, see the
+[deployment guide](docs/deployment.md) and the
+[production-serving decision](docs/architecture/ADR-004-production-deployment.md).
 
-## Installed command
+The commands above use [tested dependency locks](requirements/README.md).
+Normal pip resolution also works through the package metadata. CI produces
+[verified build bundles](docs/releases.md) with a wheel, source archive, locks,
+checksums, and build information after all checks pass.
 
-After installation, activate the environment and run `gpuroster` from any directory. `gpuroster --version` reports the installed version. Templates, CSS, Chart.js, and dashboard JavaScript are included in the wheel; the dashboard needs no external network access. GPU Roster is supported on Linux with Python 3.10 or newer.
+## Configuration
 
-The commands above use [tested dependency locks](requirements/README.md). Normal pip resolution remains supported by the package metadata. CI also produces [verified build bundles](docs/releases.md) with a wheel, source archive, locks, checksums, and build information after all checks pass.
-
-See the [deployment guide](docs/deployment.md) for systemd, password files, persistent state, SSH/TLS access, and migration/rollback. The [production-serving decision](docs/architecture/ADR-004-production-deployment.md) records alternatives and measured results.
-
-## Access and privacy
-
-Optional HTTP Basic authentication protects the page, static assets, and every API. Set credentials through your service's secret configuration or read them interactively without placing values in shell history:
-
-```bash
-read -r -p 'Dashboard username: ' GPUROSTER_AUTH_USER
-read -r -s -p 'Dashboard password: ' GPUROSTER_AUTH_PASSWORD
-printf '\n'
-export GPUROSTER_AUTH_USER GPUROSTER_AUTH_PASSWORD
-bash start.sh
-```
-
-Basic authentication requires an encrypted transport: use an SSH tunnel or a TLS-terminating reverse proxy. The application does not provide TLS or user account management. Non-loopback binding requires both credentials, and forwarded identity headers are not trusted. See the [access decision](docs/architecture/ADR-001-access-and-collection-safety.md).
-
-Process owners, PIDs, and executable names remain available to authorized viewers. Command arguments and login/session details are disabled by default. Enabling them may disclose sensitive command arguments or client addresses to every viewer.
+Settings come from environment variables, read at startup. `.env` files are
+not loaded automatically.
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
@@ -97,18 +143,112 @@ Process owners, PIDs, and executable names remain available to authorized viewer
 | `GPUROSTER_GPU_BACKEND` | `auto` | Prefer the NVML worker; fall back to CLI if initialization is unavailable. Explicit choices: `nvml`, `smi` |
 | `GPUROSTER_COLLECT_INTERVAL` | `3` | Shared collection interval in seconds, 0.1–60; clients do not change it |
 | `GPUROSTER_SESSION_INTERVAL` | `60` | Optional session/SSH evidence refresh in seconds, 1–3600 |
-| `GPUROSTER_TIMEZONE` | `UTC` | IANA timezone defining “today”; API timestamps and chart labels remain UTC |
-| `GPUROSTER_DB_PATH` | See below | SQLite history file; launcher creates the parent directory |
+| `GPUROSTER_TIMEZONE` | `UTC` | IANA timezone that defines “today” and the dashboard's displayed times; API timestamps stay UTC |
+| `GPUROSTER_DB_PATH` | See below | SQLite history file; the launcher creates the parent directory |
 
-`bash start.sh` and `python app.py` retain the checkout’s `gpu_stats.db`. The installed `gpuroster` command and `python -m gpuroster` default to `$XDG_STATE_HOME/gpuroster/history.db` (or `~/.local/state/gpuroster/history.db`). Set `GPUROSTER_DB_PATH` explicitly when migrating an existing installation; the launcher never copies an old database automatically.
+- Boolean options accept `0`, `1`, `false`, or `true`.
+- `bash start.sh` and `python app.py` keep the checkout's `gpu_stats.db`. The
+  installed `gpuroster` command and `python -m gpuroster` default to
+  `$XDG_STATE_HOME/gpuroster/history.db` (or
+  `~/.local/state/gpuroster/history.db`). Set `GPUROSTER_DB_PATH` explicitly
+  when migrating an existing installation; the launcher never copies an old
+  database automatically.
+- If neither password option is set, the launcher also reads
+  `dashboard-password` from systemd's `CREDENTIALS_DIRECTORY` when provided. A
+  missing or empty configured credential fails startup.
+- Keep databases and credentials outside Git.
 
-Boolean options accept `0`, `1`, `false`, or `true`. Environment variables are read at startup; `.env` files are not loaded automatically. Keep databases and credentials outside Git.
+## Access and privacy
 
-When neither password option is set, the launcher also reads `dashboard-password` from systemd's `CREDENTIALS_DIRECTORY` if provided. A missing or empty configured credential fails startup.
+Optional HTTP Basic authentication protects the page, static assets, and every
+API. Set credentials through your service's secret configuration, or read them
+interactively so they stay out of shell history:
 
-## Development and checks
+```bash
+read -r -p 'Dashboard username: ' GPUROSTER_AUTH_USER
+read -r -s -p 'Dashboard password: ' GPUROSTER_AUTH_PASSWORD
+printf '\n'
+export GPUROSTER_AUTH_USER GPUROSTER_AUTH_PASSWORD
+bash start.sh
+```
 
-Ordinary tests need no GPU, login records, credentials, or production database. Browser tests use synthetic metrics and also exercise the real packaged assets with external requests blocked.
+Basic authentication needs an encrypted transport, such as an SSH tunnel or a
+TLS-terminating reverse proxy. The application does not provide TLS or user
+account management. Binding to a non-loopback address requires both
+credentials, and forwarded identity headers are never trusted. See the
+[access decision](docs/architecture/ADR-001-access-and-collection-safety.md).
+
+Process owners, PIDs, and executable names are visible to authorized viewers.
+Command arguments and login/session details are off by default. Turning them
+on may show sensitive command arguments or client addresses to every viewer.
+
+## How it works
+
+```mermaid
+flowchart LR
+    NVML["NVML worker / CLI"] --> Collector["One scheduled collector"]
+    System["System / processes / optional sessions"] --> Collector
+    Collector --> Cache["Atomic snapshot + source health"]
+    Collector --> History["Rolling history + SQLite writer"]
+    Cache --> API["Flask API"]
+    History --> Queries["Shared history queries · 60 s maximum reuse"]
+    Queries --> API
+    API --> Clients["Many browser clients"]
+```
+
+The collector runs in one thread inside the web process. NVML calls run in one
+persistent child process, so a stalled driver call can time out and the
+worker can restart. CLI collection remains available. API requests copy the
+published snapshot; they never poll hardware. History requests share SQLite
+results per range for less than 60 seconds from query start, and a successful
+write invalidates earlier results. Responses report query time and age
+separately from current writer health. See
+[ADR-006](docs/architecture/ADR-006-shared-history-queries.md).
+
+Collection runs on a monotonic schedule and skips missed intervals instead of
+piling up work. Each snapshot carries a sequence number, a UTC collection
+timestamp, the backend name, and source ages. An HTTP response does not make an
+old measurement fresh. The first CPU reading is unknown until the collector has
+a baseline.
+
+The code lives in the `gpuroster` package:
+
+- `server.py` owns HTTP and collector startup and shutdown.
+- `app.py` serves HTTP and enforces access.
+- `monitoring/models.py` defines measurements.
+- `collectors.py` and `nvml.py` read sources.
+- `service.py` owns scheduling, caching, and lifecycle.
+- `sessions.py` accounts for login intervals.
+- `history.py` owns rolling data and SQLite.
+
+The dashboard (`templates/index.html`, `static/dashboard.js`) updates GPU cards
+in place, and themes come from CSS design tokens. See
+[ADR-002](docs/architecture/ADR-002-shared-collection.md),
+[ADR-003](docs/architecture/ADR-003-time-identity-and-accounting.md), and
+[ADR-009](docs/architecture/ADR-009-dashboard-experience.md).
+
+### API
+
+`GET /api/stats` returns the current snapshot (`schema_version: 2`), and
+`GET /api/gpu_history?range=today|week|month` returns bucketed history. Session
+routes return `403` unless enabled. Before the first snapshot, `/api/stats`
+returns `503 collector_not_ready`. Starting the collector is explicit:
+importing the WSGI factory (`gpuroster.app:create_app`) does not start
+collection or take database ownership. See the
+[snapshot contract](docs/architecture/snapshot-v2.md) and the notes on
+[upgrading from earlier versions](docs/upgrading.md).
+
+Connected time is the union of a user's session intervals, clipped to each
+window, so simultaneous terminals count once. “Today” uses the configured
+timezone, including DST. Week and month mean the last 7 and 30 elapsed days.
+Non-interactive SSH contributes only currently visible evidence and is not
+stored as an authoritative session ledger.
+
+## Development
+
+Ordinary tests need no GPU, login records, credentials, or production
+database. Browser tests use synthetic metrics and also exercise the real
+packaged assets with external requests blocked.
 
 ```bash
 venv/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements/build.lock -r requirements/dev.lock
@@ -123,67 +263,57 @@ node --check gpuroster/static/dashboard.js
 bash -n start.sh
 ```
 
-Backend tests alone need only the runtime dependencies:
+The backend tests alone need only the runtime dependencies
+(`venv/bin/python -m unittest discover -s tests -v`). Frontend assets are
+plain CSS and JavaScript served under a restrictive content policy. Node is
+needed only to refresh the vendored Chart.js bundle; see the
+[asset workflow](frontend/README.md).
 
-```bash
-venv/bin/python -m unittest discover -s tests -v
-```
+[CI](.github/workflows/ci.yml) runs locked installs on Python 3.10, 3.12, and
+3.14, and separately tests the latest compatible runtime dependencies. It also
+runs Chromium regressions, checks formatting, lint, and asset/lock drift, tests
+installed packages and containers, audits runtime dependencies, and compares
+two independent release builds before uploading the tested bundle. Read the
+[contribution guidelines](CONTRIBUTING.md) before opening a pull request.
 
-[CI](.github/workflows/ci.yml) checks locked installs on Python 3.10/3.12/3.14 and separately tests current compatible runtime dependencies. It runs Chromium regressions, checks formatting/lint and asset/lock drift, tests installed packages, audits runtime dependencies, and compares two independent release builds before uploading the tested bundle. See [benchmarks](docs/benchmarks.md), [Phase 6 validation](docs/validation/phase-six.md), and [contribution guidelines](CONTRIBUTING.md).
+## Documentation
 
-## Architecture
+| Topic | Where |
+| --- | --- |
+| Docker and Compose | [docs/docker.md](docs/docker.md) |
+| systemd, TLS, and migration | [docs/deployment.md](docs/deployment.md) |
+| Release bundles | [docs/releases.md](docs/releases.md) |
+| Upgrading from earlier versions | [docs/upgrading.md](docs/upgrading.md) |
+| Architecture decisions | [docs/architecture/](docs/architecture/) |
+| Benchmarks and measurements | [docs/benchmarks.md](docs/benchmarks.md) |
+| Hardware validation | [docs/validation/hardware.md](docs/validation/hardware.md) |
 
-```mermaid
-flowchart LR
-    NVML["NVML worker / CLI"] --> Collector["One scheduled collector"]
-    System["System / processes / optional sessions"] --> Collector
-    Collector --> Cache["Atomic snapshot + source health"]
-    Collector --> History["Rolling history + SQLite writer"]
-    Cache --> API["Flask API"]
-    History --> Queries["Shared history queries · 60 s maximum reuse"]
-    Queries --> API
-    API --> Clients["Many browser clients"]
-```
+## Limits and next work
 
-The collector runs in one thread in the web process. NVML calls run in one persistent child process so a stalled driver call can time out and the worker can be restarted. CLI collection remains available. API requests copy published snapshots; they never poll hardware. Historical requests share SQLite results per range for less than 60 seconds from query start; a successful write invalidates prior results. Responses expose query time/age separately from current writer health. See [ADR-006](docs/architecture/ADR-006-shared-history-queries.md).
-
-Collection attempts use a monotonic schedule and skip missed intervals rather than accumulating work. Snapshots carry a sequence number, UTC collection timestamp, backend name, and source ages. An HTTP response does not make an old measurement fresh. The first CPU interval is unknown until the collector has a baseline.
-
-Code lives in the `gpuroster` package: `server.py` owns HTTP and collector startup/shutdown; `app.py` serves HTTP and enforces access; `monitoring/models.py` defines measurements; `collectors.py` and `nvml.py` read sources; `service.py` owns scheduling/cache/lifecycle; `sessions.py` accounts for intervals; `history.py` owns rolling data and SQLite. See [ADR-002](docs/architecture/ADR-002-shared-collection.md) and [ADR-003](docs/architecture/ADR-003-time-identity-and-accounting.md).
-
-## Changes from the baseline
-
-- The default bind changed from all interfaces to loopback. Remote binding without configured authentication is rejected.
-- Session endpoints return `403` unless explicitly enabled. The default process `command` contains an executable name instead of arguments.
-- Unsupported GPU metrics are `null`, with collection failures described in `health.sources`. The dashboard distinguishes partial, stale, and unavailable values.
-- Non-interactive SSH is labeled as such; it no longer implies VS Code. API fields changed from `has_vscode` to `has_noninteractive_ssh`, and the synthetic session source is now `noninteractive_ssh`.
-- Imports no longer initialize SQLite or start threads. Use `gpuroster`, `python -m gpuroster`, or the compatibility checkout launcher `bash start.sh`. A bare WSGI factory (`gpuroster.app:create_app`) does not start collection or acquire database ownership.
-- Phase 1 preserved the database schema. Phase 2 adds a nullable `gpu_uuid` column on the collector's first write. Existing records remain labeled as legacy index history; they are not assigned to a current GPU. The application database has not been migrated merely by checking out or importing this code.
-
-## Phase 2 API and database migration
-
-Install the updated requirements before restarting. Stop the old instance and back up its SQLite file before launching the new collector. Use one web process; do not run multiple instances against the same database. The migration adds a column and preserves rows within the existing 31-day retention policy. Ordinary writes still remove expired rows. Old explicit-column inserts remain compatible, but rolling back cannot restore UUID-based history semantics.
-
-`/api/stats` now returns `schema_version: 2`, `sequence`, and the actual collection timestamp. GPU records include `uuid`; processes include `gpu_uuid`, and an unmapped index is `null`. Live `history` is keyed by UUID with numeric Unix-second timestamps; `history_devices` supplies display indices. Historical datasets have stable `id` values, UTC ISO labels, and explicit gaps. GPU/process memory fields retain their old API names but mean MiB/GiB; system RAM also exposes exact byte counts. See the [snapshot contract](docs/architecture/snapshot-v2.md).
-
-Before the first snapshot, `/api/stats` returns `503 collector_not_ready`. Starting the collector is explicit: importing a WSGI app alone will not start it. Session endpoints use cached evidence and return 503 when required sources are unavailable or stale. Truncated or malformed records are marked partial in source health.
-
-Connected time is the union of a user's session intervals, clipped to each window. Simultaneous terminals count once. “Today” uses the configured timezone (including DST); week/month mean the preceding 7/30 elapsed days. Non-interactive SSH contributes only currently visible evidence and is not persisted as an authoritative session ledger.
-
-## Current limits and next work
-
-An optional [read-only hardware validation command](docs/validation/hardware.md)
-checks NVML/CLI agreement, native worker memory, and worker recovery on a target
-host. Ordinary CI remains hardware-independent. The collector reports physical
-GPUs; per-MIG-instance monitoring is not implemented.
-The [Phase 7 results](docs/validation/phase-seven.md) record a passing 15-minute
-eight-GPU observation and bounded synthetic identity retention, with explicit
-driver and permission coverage limits.
-
-The launcher uses Waitress with four HTTP threads, one collector thread, and a child NVML worker. A local advisory lock rejects a second launcher using the same database. SIGINT and SIGTERM stop the HTTP loop and collector; in-flight responses may be interrupted during shutdown. Use one instance on a local filesystem. The cache is process-local: there is no supported multi-worker web deployment yet.
-
-Benchmarks cover one host and synthetic clients; they are not broad NVIDIA-driver or MIG compatibility certification. Slow OS process inspection can still delay a collection cycle, while clients continue to receive cached data with age/status. Cold history queries still occupy HTTP threads; shared results avoid duplicate aggregation. Larger retention, downsampling, and an independent collector service remain future architecture work.
-
-Connected-time estimates now handle overlap and window boundaries, but login logs may be rotated, truncated, incomplete, or inaccessible. SSH process visibility depends on OS permissions. These estimates are not billing records or GPU usage time.
-
-Frontend assets are served locally under a restrictive content policy; Node is needed only to rebuild them. See the [asset workflow](frontend/README.md). Python locks cover deployment/build dependencies; operating-system, browser-system, and NVIDIA driver dependencies remain external. Demo data is illustrative; it cannot validate driver support or target-host permissions.
+- An optional [read-only hardware validation command](docs/validation/hardware.md)
+  checks NVML/CLI agreement, native worker memory, and worker recovery on a
+  target host. Ordinary CI stays hardware-independent. The
+  [Phase 7 results](docs/validation/phase-seven.md) record a passing 15-minute
+  eight-GPU observation and bounded synthetic identity retention, with explicit
+  limits on driver and permission coverage.
+- The collector reports physical GPUs. Per-MIG-instance monitoring is not
+  implemented, and FREE is a heuristic, not a reservation.
+- The launcher uses Waitress with four HTTP threads, one collector thread, and a
+  child NVML worker. A local advisory lock rejects a second launcher on the same
+  database. SIGINT and SIGTERM stop the HTTP loop and collector; in-flight
+  responses may be cut off during shutdown. Run one instance on a local
+  filesystem. The cache is per process, so multi-worker web deployment is not
+  supported yet.
+- Benchmarks cover one host and synthetic clients; they do not certify broad
+  NVIDIA driver or MIG compatibility. Slow OS process inspection can still delay
+  a collection cycle, while clients keep receiving cached data with its age and
+  status. Cold history queries still occupy HTTP threads, though shared results
+  avoid duplicate aggregation. Larger retention, downsampling, and an
+  independent collector service remain future work.
+- Connected-time estimates handle overlap and window boundaries, but login logs
+  may be rotated, truncated, incomplete, or unreadable. SSH process visibility
+  depends on OS permissions. These estimates are not billing records or GPU
+  usage time.
+- Python locks cover deployment and build dependencies. Operating-system,
+  browser-system, and NVIDIA driver dependencies remain external. Demo data is
+  illustrative and cannot validate driver support or target-host permissions.

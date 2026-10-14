@@ -23,6 +23,7 @@ gpuroster/templates/**
 gpuroster/static/**
 !gpuroster/static/*.js
 !gpuroster/static/*.css
+!gpuroster/static/*.svg
 !gpuroster/static/vendor/
 gpuroster/static/vendor/**
 !gpuroster/static/vendor/*.js
