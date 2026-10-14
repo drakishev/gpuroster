@@ -430,7 +430,7 @@ function renderGPUGrid(gpus, processesKnown) {
   grid.removeAttribute('aria-busy');
   if (!gpus.length) {
     gpuCards.clear();
-    grid.replaceChildren(element('p', 'empty-state col-span-full', 'No GPUs detected.'));
+    grid.replaceChildren(element('p', 'empty-state', 'No GPUs detected.'));
     return;
   }
   const seen = new Set();
@@ -454,7 +454,7 @@ function gpuUnavailable(message) {
   gpuCards.clear();
   const grid = byId('gpu-grid');
   grid.removeAttribute('aria-busy');
-  grid.replaceChildren(element('p', 'empty-state col-span-full', message));
+  grid.replaceChildren(element('p', 'empty-state', message));
 }
 
 /* Tables */
@@ -464,9 +464,9 @@ function renderProcTable(processes) {
   const sorted = [...processes].sort((a, b) => order(a) - order(b) || (b.mem_mb || 0) - (a.mem_mb || 0));
   byId('proc-tbody').replaceChildren(...sorted.map(process => {
     const row = element('tr');
-    const gpu = element('span', 'inline-flex items-center gap-2');
+    const gpu = element('span', 'gpu-ref');
     if (process.gpu !== null) {
-      const swatch = element('span', 'series-swatch mt-0');
+      const swatch = element('span', 'series-swatch');
       swatch.style.backgroundColor = seriesColor(process.gpu_uuid || 'index:' + process.gpu);
       gpu.append(swatch);
     }
@@ -487,7 +487,7 @@ function renderUserGPUTable(users, gpus) {
     const memory = element('span', 'share');
     if (finite(info.mem_gb) && totalGiB > 0) {
       const track = element('span', 'bar-bg');
-      const fill = element('span', 'bar-fill block');
+      const fill = element('span', 'bar-fill');
       fill.style.backgroundColor = userColor(name);
       setBar(fill, info.mem_gb / totalGiB * 100);
       track.append(fill);

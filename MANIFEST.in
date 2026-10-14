@@ -12,4 +12,4 @@ recursive-include tests/browser *.py
 recursive-include tests/packaging *.py
 recursive-include benchmarks *.py
 include package.json package-lock.json scripts/build-assets.cjs
-recursive-include frontend *.css *.cjs *.md
+recursive-include frontend *.md

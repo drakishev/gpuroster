@@ -265,8 +265,9 @@ bash -n start.sh
 
 The backend tests alone need only the runtime dependencies
 (`venv/bin/python -m unittest discover -s tests -v`). Frontend assets are
-served locally under a restrictive content policy, and Node is needed only to
-rebuild them; see the [asset workflow](frontend/README.md).
+plain CSS and JavaScript served under a restrictive content policy. Node is
+needed only to refresh the vendored Chart.js bundle; see the
+[asset workflow](frontend/README.md).
 
 [CI](.github/workflows/ci.yml) runs locked installs on Python 3.10, 3.12, and
 3.14, and separately tests the latest compatible runtime dependencies. It also

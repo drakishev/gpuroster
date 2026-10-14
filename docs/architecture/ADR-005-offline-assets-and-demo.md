@@ -1,6 +1,7 @@
 # ADR-005: Local frontend assets and an isolated synthetic demo
 
-Status: accepted, 2026-10-01.
+Status: accepted, 2026-10-01. The Tailwind compilation step was superseded by
+[ADR-010](ADR-010-authored-css.md) on 2026-10-14.
 
 ## Context and requirements
 

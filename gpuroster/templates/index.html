@@ -24,7 +24,7 @@
     </div>
     <div class="topbar-actions">
       <span class="status-pill" id="connection-status" data-state="connecting" role="status">CONNECTING</span>
-      <span class="last-update"><span class="hidden sm:inline">Updated </span><span id="last-update">–</span></span>
+      <span class="last-update"><span class="update-label">Updated </span><span id="last-update">–</span></span>
       <button type="button" class="icon-button" id="theme-toggle" aria-label="Switch to light theme" title="Switch theme">
         <span class="theme-icon" aria-hidden="true"></span>
       </button>
@@ -41,7 +41,7 @@
   <!-- Host summary -->
   <section aria-labelledby="summary-heading">
     <h2 id="summary-heading" class="sr-only">Host summary</h2>
-    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+    <div class="kpi-grid">
       <div class="panel kpi">
         <div class="kpi-label">GPU utilization</div>
         <div class="kpi-value" id="sys-gpu-util">–</div>
@@ -81,11 +81,11 @@
       <h2 id="gpus-heading" class="section-title">GPUs</h2>
       <p class="section-meta" id="gpu-summary"></p>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" id="gpu-grid" aria-busy="true">
+    <div class="gpu-grid" id="gpu-grid" aria-busy="true">
       <div class="skeleton-card" aria-hidden="true"></div>
       <div class="skeleton-card" aria-hidden="true"></div>
-      <div class="skeleton-card hidden sm:block" aria-hidden="true"></div>
-      <div class="skeleton-card hidden sm:block" aria-hidden="true"></div>
+      <div class="skeleton-card is-extra" aria-hidden="true"></div>
+      <div class="skeleton-card is-extra" aria-hidden="true"></div>
     </div>
   </section>
 
@@ -108,8 +108,8 @@
   </section>
 
   <!-- Processes and people -->
-  <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
-    <section class="panel panel-pad xl:col-span-3" aria-labelledby="proc-heading">
+  <div class="split-grid wide-start">
+    <section class="panel panel-pad" aria-labelledby="proc-heading">
       <div class="panel-head">
         <div>
           <h2 id="proc-heading" class="panel-title">Processes</h2>
@@ -134,7 +134,7 @@
       </div>
     </section>
 
-    <section class="panel panel-pad xl:col-span-2" aria-labelledby="users-heading">
+    <section class="panel panel-pad" aria-labelledby="users-heading">
       <div class="panel-head">
         <div>
           <h2 id="users-heading" class="panel-title">Who's using GPUs</h2>
@@ -160,7 +160,7 @@
   </div>
 
 {% if config['SHOW_SESSIONS'] %}
-  <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+  <div class="split-grid">
     <!-- Active connections -->
     <section class="panel panel-pad" aria-labelledby="conn-heading">
       <div class="panel-head">

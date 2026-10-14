@@ -6,7 +6,6 @@
   },
   "devDependencies": {
     "@kurkle/color": "0.3.2",
-    "chart.js": "4.4.3",
-    "tailwindcss": "3.4.17"
+    "chart.js": "4.4.3"
   }
 }
