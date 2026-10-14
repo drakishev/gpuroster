@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 from flask import Flask, current_app, jsonify, render_template, request
 
+from gpuroster import __version__
 from gpuroster.monitoring.history_cache import HistoryQueryCache
 from gpuroster.monitoring.service import CollectorService
 from gpuroster.settings import load_settings
@@ -102,7 +103,7 @@ def collector():
 
 
 def index():
-    return render_template("index.html")
+    return render_template("index.html", version=__version__)
 
 
 def api_stats():

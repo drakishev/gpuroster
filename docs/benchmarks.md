@@ -221,3 +221,21 @@ The [validation report](validation/phase-eight.md) records method, environment,
 acceptance checks, and limits. [Aggregate results](../benchmarks/results/container-deployment-2026-10-01.json)
 contain no real process or account identities. These short runs do not replace
 the earlier HTTP, storage, browser, or memory benchmarks.
+
+## Dashboard redesign
+
+The October 2026 redesign ([ADR-009](architecture/ADR-009-dashboard-experience.md))
+was measured with the offline demo benchmark above, running `main` and the
+redesign back to back on one machine. Regenerate the README screenshots with:
+
+```bash
+python -m benchmarks.dashboard --screenshot docs/images/demo-dashboard.png
+python -m benchmarks.dashboard --color-scheme dark --screenshot docs/images/demo-dashboard-dark.png
+```
+
+A full refresh took 17.3 ms (median) before and 19.0–19.5 ms after. Retained
+heap after 1,000 refreshes went from 4.15 MB to 4.39–4.46 MB, with the same
+growth curve as the baseline. There were no external requests or browser
+errors. See the [results](../benchmarks/results/dashboard-redesign-2026-10-14.json).
+These numbers come from one machine and are not comparable to the 2026-10-01
+runs above.

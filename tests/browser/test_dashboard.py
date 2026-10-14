@@ -201,7 +201,7 @@ class BrowserTests(unittest.TestCase):
         self.assertIn(payload, self.page.locator("#conn-tbody").inner_text())
         self.page.locator("#session-filter-pills button").nth(1).click()
         self.assertEqual(
-            self.page.locator("#session-count").inner_text(), "Showing 1 sessions"
+            self.page.locator("#session-count").inner_text(), "Showing 1 session"
         )
         self.assertFalse(self.errors)
 
@@ -325,7 +325,7 @@ class BrowserTests(unittest.TestCase):
         )
         self.assertEqual(
             self.page.evaluate("document.getElementById('util-chart').clientHeight"),
-            220,
+            280,
         )
         self.page.locator('[data-util-range="week"]').click()
         self.wait_for("Chart.getChart('util-chart').data.datasets[0].label === 'GPU 3'")
@@ -437,7 +437,7 @@ class BrowserTests(unittest.TestCase):
         )
         self.page.wait_for_timeout(100)
         self.assertIn(
-            "Recent Samples", self.page.locator("#util-chart-title").text_content()
+            "Recent samples", self.page.locator("#util-chart-title").text_content()
         )
         self.assertNotIn("OLD", self.page.evaluate("testCharts[0].data.labels"))
 
@@ -467,6 +467,125 @@ class BrowserTests(unittest.TestCase):
         )
         for route in self.stats_routes:
             route.abort()
+
+    def test_gpu_states_distinguish_free_idle_and_active_devices(self):
+        busy, idle, free = (copy.deepcopy(self.stats["gpus"][0]) for _ in range(3))
+        idle.update(index=1, uuid="GPU-idle", utilization=0)
+        free.update(index=2, uuid="GPU-free", utilization=0, memory_used=0)
+        free["processes"] = []
+        self.stats["gpus"] = [busy, idle, free]
+        self.load()
+        badges = self.page.locator("#gpu-grid .state-badge").all_inner_texts()
+        self.assertEqual(badges, ["ACTIVE", "IDLE", "FREE"])
+        self.assertEqual(self.page.locator("#sys-active-gpus").inner_text(), "1 / 3")
+        self.assertEqual(self.page.locator("#sys-free-gpus").inner_text(), "1 free")
+        self.assertTrue(self.page.title().startswith("1/3 free"))
+        self.assertFalse(self.errors)
+
+    def test_unknown_process_list_never_reports_a_gpu_as_free(self):
+        self.stats["gpus"][0].update(utilization=0, memory_used=0, processes=[])
+        self.stats["health"]["sources"]["processes"] = {"status": "unavailable"}
+        self.load()
+        self.assertEqual(
+            self.page.locator("#gpu-grid .state-badge").inner_text(), "IDLE"
+        )
+        self.assertEqual(self.page.locator("#sys-procs").inner_text(), "—")
+
+    def test_gpu_cards_update_in_place_between_snapshots(self):
+        self.load()
+        self.page.evaluate("window.firstCard = document.querySelector('.gpu-card')")
+        self.stats["gpus"][0]["utilization"] = 77
+        self.page.evaluate("fetchStats()")
+        self.assertTrue(
+            self.page.evaluate(
+                "document.querySelector('.gpu-card') === window.firstCard"
+            )
+        )
+        self.assertIn("77", self.page.locator(".gpu-util").inner_text())
+
+    def test_chart_series_follow_display_index_not_uuid_order(self):
+        points = [{"ts": 1767225599, "util": 10}, {"ts": 1767225602, "util": 42}]
+        self.stats["history"] = {"GPU-a": points, "GPU-b": points}
+        self.stats["history_devices"] = {"GPU-a": {"index": 1}, "GPU-b": {"index": 0}}
+        self.load()
+        self.assertEqual(
+            self.page.evaluate("testCharts[0].data.datasets.map(item => item.label)"),
+            ["GPU 0", "GPU 1"],
+        )
+
+    def test_warming_up_cpu_baseline_is_not_reported_as_a_failure(self):
+        self.stats["system"]["cpu_percent"] = None
+        self.stats["health"]["sources"]["system"] = {"status": "warming_up"}
+        self.load()
+        self.assertEqual(self.page.locator("#connection-status").inner_text(), "LIVE")
+        self.assertEqual(self.page.locator("#sys-cpu").inner_text(), "—")
+        self.assertFalse(self.page.locator("#status-banner").is_visible())
+
+    def test_times_use_the_configured_reporting_timezone(self):
+        self.stats["history"] = {
+            "GPU-example": [
+                {"ts": 1767225599, "util": 10},
+                {"ts": 1767225602, "util": 42},
+            ]
+        }
+        self.sessions[0]["login"] = "2025-12-31T23:30:00+00:00"
+        with patch.dict(application.config, {"TIMEZONE": "Asia/Tokyo"}):
+            self.load()
+        self.assertEqual(
+            self.page.evaluate("testCharts[0].data.labels"), ["08:59:59", "09:00:02"]
+        )
+        self.assertIn(
+            "Asia/Tokyo", self.page.locator("#util-chart-title").text_content()
+        )
+        self.wait_for(
+            "document.getElementById('session-tbody').textContent.includes('08:30')"
+        )
+        self.assertIn("Asia/Tokyo", self.page.locator("footer").inner_text())
+
+    def test_session_history_pages_long_lists(self):
+        self.sessions = [
+            {**self.sessions[0], "still_in": False, "terminal": f"pts/{index}"}
+            for index in range(30)
+        ]
+        self.load()
+        self.wait_for("document.getElementById('session-count').textContent !== ''")
+        self.assertEqual(
+            self.page.locator("#session-count").inner_text(),
+            "Showing 25 of 30 sessions",
+        )
+        self.assertEqual(self.page.locator("#session-tbody tr").count(), 25)
+        self.page.locator("#session-more").click()
+        self.assertEqual(
+            self.page.locator("#session-count").inner_text(), "Showing 30 sessions"
+        )
+        self.assertFalse(self.page.locator("#session-more").is_visible())
+
+    def test_theme_choice_toggles_persists_and_recolors_charts(self):
+        self.load()
+        initial = self.page.evaluate(
+            "getComputedStyle(document.documentElement).getPropertyValue('--scheme').trim()"
+        )
+        color = self.page.evaluate("testCharts[0].data.datasets[0].borderColor")
+        self.page.locator("#theme-toggle").click()
+        chosen = "light" if initial == "dark" else "dark"
+        self.assertEqual(
+            self.page.evaluate("document.documentElement.dataset.theme"), chosen
+        )
+        self.assertEqual(
+            self.page.evaluate("localStorage.getItem('gpuroster-theme')"), chosen
+        )
+        self.assertNotEqual(
+            self.page.evaluate("testCharts[0].data.datasets[0].borderColor"), color
+        )
+        self.assertEqual(
+            self.page.locator("#theme-toggle").get_attribute("aria-label"),
+            f"Switch to {initial} theme",
+        )
+        self.load()
+        self.assertEqual(
+            self.page.evaluate("document.documentElement.dataset.theme"), chosen
+        )
+        self.assertFalse(self.errors)
 
 
 if __name__ == "__main__":

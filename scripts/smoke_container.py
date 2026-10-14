@@ -148,6 +148,8 @@ def run_case(image, mode):
                 "/",
                 "/static/dashboard.js",
                 "/static/dashboard.css",
+                "/static/theme.js",
+                "/static/favicon.svg",
                 "/static/vendor/chart.umd.js",
                 "/api/stats",
             ):

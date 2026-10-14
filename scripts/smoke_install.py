@@ -129,6 +129,8 @@ def main():
                     "/",
                     "/static/dashboard.js",
                     "/static/dashboard.css",
+                    "/static/theme.js",
+                    "/static/favicon.svg",
                     "/static/vendor/chart.umd.js",
                     "/static/vendor/chartjs.LICENSE.txt",
                     "/api/gpu_history",
